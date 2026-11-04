@@ -1,0 +1,913 @@
+; Constants for immediate operands (tools/disasm.py -> src/const.inc)
+; NAME = EXPR [@var ...] [; comment]   define; @var (RAM/register name, may be name+N): used automatically where the
+;                                      value is stored into var (LDx #v / STx var) or tested against it
+;                                      (LDx var / CMP|CPx|AND|ORA|EOR #v, also later CMPs with only branches between)
+; use AAAA [AAAA ...] EXPR             the immediate of these instructions is EXPR (checked against the byte)
+; EXPR is a ca65 expression: $hex %bin 'c', names, + - * / & | ^ ~ << >> ( ); a leading < or > = low / high byte.
+; Definitions may use earlier constants and RAM/register names. (?) = meaning guessed from the code.
+; Left as numbers on purpose: #0 / #1 used as clear / flag / step, the negation idiom EOR #$FF + ADC #1,
+; loop starts at -1 (LDX #$FF / INX) and the sector indices 0-6 of DirectionFromDelta.
+
+; ---- 6502 / generic
+BITS_PER_BYTE    = 8
+DECIMAL          = 10                    ; BCD digit carry
+DIGIT_MASK       = $0F                   ; digit of a score byte (blank tile $10 -> 0)
+P_FLAG_D         = $08                   ; decimal flag in a pushed P
+P_FLAG_B         = $10                   ; break flag in a pushed P
+PRG_START        = $E000
+use F61E F480 BITS_PER_BYTE
+use F775 F779 F80A F80E DECIMAL
+use F771 FECC FED3 DIGIT_MASK
+use FDBE P_FLAG_B|P_FLAG_D
+use FDC5 >PRG_START
+
+; ---- controller bits (joy1, joy2, curJoy)
+BTN_A            = $80
+BTN_B            = $40
+BTN_SELECT       = $20
+BTN_START        = $10 @joy1
+BTN_UP           = $08
+BTN_DOWN         = $04 @curJoy           ; demo AI: no movement
+BTN_LEFT         = $02 @curJoy
+BTN_RIGHT        = $01 @curJoy
+JOY_DATA_BITS    = $03                   ; $4016/$4017 bits 0-1: controller + expansion port
+JOY_MIC          = $04                   ; $4016 bit 2: microphone of Famicom controller 2
+use E0DE BTN_RIGHT
+use E09B E0CE BTN_A
+use E4F6 FF4D BTN_START
+use F890 F987 BTN_SELECT|BTN_START
+use FDD9 FDDB BTN_A|BTN_B
+use F485 F48E JOY_DATA_BITS
+use F4AA JOY_MIC
+
+; ---- PPU
+PPUCTRL_NMI      = $80 @ppuCtrlShadow
+PPUCTRL_BG_1000  = $10 @PPUCTRL          ; background patterns at PPU $1000
+PPUCTRL_SPR_1000 = $08                   ; sprite patterns at PPU $1000
+PPUCTRL_INC32    = $04                   ; PPUDATA address += 32 (vertical writes)
+PPUMASK_SPR      = $10
+PPUMASK_BG       = $08
+PPUMASK_SPR_LEFT = $04
+PPUMASK_BG_LEFT  = $02
+PPUMASK_ON       = PPUMASK_SPR|PPUMASK_BG|PPUMASK_SPR_LEFT|PPUMASK_BG_LEFT @PPUMASK
+PPUMASK_OFF      = PPUMASK_SPR_LEFT|PPUMASK_BG_LEFT @PPUMASK
+PPU_NT0          = $2000                 ; nametable 0 (game screen)
+PPU_NT2          = $2800                 ; nametable 2 (title / text screen)
+NT2_HI_BIT       = >(PPU_NT2-PPU_NT0)
+PPU_ATTR0        = $23C0
+NT_TILES         = $03C0                 ; nametable bytes before the attribute table
+ATTR_SIZE        = $40
+NT_ROW_SIZE      = 32
+PPU_PALETTE      = $3F00
+PALETTE_SIZE     = 32
+PAL_TITLE_ENTRY  = PPU_PALETTE+5         ; colour changed while the title scrolls in
+COLOR_RED        = $16
+COLOR_WHITE      = $30
+use F3CD FCAF <~PPUCTRL_INC32
+use F90A <~PPUCTRL_BG_1000
+use F961 FABE <~PPUCTRL_SPR_1000
+use F90C PPUCTRL_SPR_1000
+use F963 FABC PPUCTRL_BG_1000
+use FD10 F443 >PPU_PALETTE
+use FD15 <PPU_PALETTE
+use F448 <PAL_TITLE_ENTRY
+use F44D COLOR_RED
+use F456 COLOR_WHITE
+use FD23 PALETTE_SIZE
+use FE1C >oamBuffer
+use FB81 FB0B FCB9 >PPU_NT0
+use FB88 FD05 NT2_HI_BIT
+use FCE8 >PPU_ATTR0
+use FCED <(PPU_ATTR0+8)
+use FCC3 >NT_TILES
+use FCC5 <NT_TILES
+use FCD9 ATTR_SIZE
+use EAD9 EB8D NT_ROW_SIZE
+ATTR_RUNS_NT2    = $0F                   ; offset of the second list in AttrRuns
+use FCE6 ATTR_RUNS_NT2
+
+; ---- OAM
+struct Sprite ypos tile attr xpos ; one OAM entry
+array oamBuffer Sprite
+OAM_ENTRY        = 4                     ; = .sizeof(Sprite)
+OAM_FLIP_V       = $80
+OAM_FLIP_H       = $40
+OAM_BEHIND       = $20
+OAM_PALETTE      = $03
+OAM_ATTR_LOW     = $0F                   ; palette + unused bits, kept when the flip bits change
+OAM_SHOT         = $80                   ; oamBuffer layout: divers $00-$7F (16 bytes per slot), shot,
+OAM_BULLETS      = $84                   ; 7 enemy bullets,
+OAM_STARS        = $A0                   ; 24 stars
+SPRITE_W         = 8
+SPRITE_HIDDEN_Y  = $FF
+OFFSCREEN_Y      = $F8                   ; diver sprite Y at or below this = left the screen
+use E40B E8D4 OAM_PALETTE
+use E40D OAM_FLIP_V|OAM_FLIP_H|OAM_BEHIND
+use E8BE <~OAM_BEHIND
+use E8C3 OAM_BEHIND
+use F5BA OAM_ATTR_LOW
+use F972 OAM_STARS
+use FAD1 OAM_STARS/OAM_ENTRY-1
+use E84A E895 E8A4 E8B0 SPRITE_W
+use E8AD E966 E971 SPRITE_W/2
+use F93E F957 SPRITE_HIDDEN_Y
+use E88D OFFSCREEN_Y
+
+; ---- tiles
+TILE_BLANK       = $10
+TILE_SHOT        = $30
+TILE_STAR        = $32
+TILE_BULLET      = $37
+TILE_ALIEN       = $44                   ; first diver tile; + diverIsFlagship ($60) for the flagship
+FLAGSHIP_TILE_OFFSET = $60
+TILE_SHIP_BG     = $63                   ; ship drawn as background tiles at SHIP_BG_VRAM when the player spawns
+TILE_FLAG        = $6C                   ; HUD stage flag, upper half
+TILE_LIFE        = $6E                   ; HUD ship icon, upper half
+TILE_ICON_MIN    = $60                   ; HUD tiles >= this have a lower half (tile + 1)
+TILE_EXPLOSION   = $70
+TILE_FLAGSHIP_BG = $A7                   ; top (flagship row) tile of a formation column redraw
+TILE_SHIP_EXPLOSION = $C3                ; ship explosion in the background
+TILE_MENU_CURSOR = $2F
+TILE_TITLE_MARK  = $2E
+use E118 E86D EAC6 EB4A F565 F78A F7BF F7EE FB17 FB44 FC15 FCC7 FD3E TILE_BLANK
+use E3E5 TILE_SHOT
+use E403 TILE_STAR
+use E3D8 TILE_BULLET
+use F5C4 FA55 TILE_ALIEN
+use FA20 TILE_ALIEN+FLAGSHIP_TILE_OFFSET
+use E367 TILE_SHIP_BG
+use F7F2 TILE_FLAG
+use F7C3 TILE_LIFE
+use F7C8 F7F7 TILE_ICON_MIN
+use E6BB EF57 TILE_EXPLOSION
+use EB25 TILE_FLAGSHIP_BG
+use EA83 TILE_SHIP_EXPLOSION
+use F913 TILE_MENU_CURSOR
+use F91D TILE_TITLE_MARK
+TILE_PAIR_STEP   = 2                     ; QueueTilePairUp: vramQueueTile2 = vramQueueTile1 - 2
+use EB7D TILE_PAIR_STEP
+
+; ---- VRAM addresses
+TEXT_LEFT_COL    = 3                     ; texts and the score row start at column 3
+BLANK_ROW_VRAM   = PPU_NT0+TEXT_LEFT_COL
+SCORE_ROW_VRAM   = PPU_NT2+4*NT_ROW_SIZE+TEXT_LEFT_COL
+HUD_VRAM         = $2074
+SHIP_BG_VRAM     = $236F
+FORMATION_VRAM   = $21A6
+use F3ED >BLANK_ROW_VRAM
+use F3F1 <BLANK_ROW_VRAM
+use E2D2 FC27 >SCORE_ROW_VRAM
+use E2D6 FC2B <SCORE_ROW_VRAM
+use E2CE FC23 <scoreArea
+use FF03 >HUD_VRAM
+use FEFE <HUD_VRAM
+use E35F EA8B EACE >SHIP_BG_VRAM
+use E363 <SHIP_BG_VRAM
+use EAF8 >FORMATION_VRAM
+use EAF4 <FORMATION_VRAM
+use FB72 TEXT_LEFT_COL<<3
+VRAM_QUEUE_MAX   = 16 @vramQueueCount    ; NMI tile queue entries
+use F40C VRAM_QUEUE_MAX
+ROW_TILES        = 26                    ; tiles in a text / blank row
+use F3E9 FBA0 ROW_TILES
+use FB46 ROW_TILES-1
+HUD_BUFFER_SIZE  = 44
+use FC1B HUD_BUFFER_SIZE
+use E116 HUD_BUFFER_SIZE-1
+use FEF3 HUD_BUFFER_SIZE/2
+EVENT_QUEUE_SIZE = 32
+use EA5B EAE8 EVENT_QUEUE_SIZE-1
+
+; ---- data copied from CHR ROM at RESET
+CHR_GAME_DATA    = $1480                 ; -> chrData ($0300-$067F)
+CHR_GAME_DATA_SIZE = $0380
+CHR_SONGS        = $098E                 ; -> songTable ($014E-$01FF)
+SONG_DATA_SIZE   = $B2
+SONG_PTR_BIAS    = CHR_SONGS-songTable   ; song pointers are PPU addresses
+TEXT_PTR_BIAS    = CHR_GAME_DATA-chrData ; text pointers are PPU addresses
+use FC53 >CHR_GAME_DATA
+use FC58 <CHR_GAME_DATA
+use FC5D >chrData
+use FC74 >(chrData+CHR_GAME_DATA_SIZE)
+use FC7E <(chrData+CHR_GAME_DATA_SIZE)
+use FC85 >CHR_SONGS
+use FC8A <CHR_SONGS
+use FC93 <songTable
+use FCA2 SONG_DATA_SIZE
+use F145 <SONG_PTR_BIAS
+use F14C >SONG_PTR_BIAS
+use FB66 <TEXT_PTR_BIAS
+use FB6C >TEXT_PTR_BIAS
+use FB53 <textBuf
+use FB4F >textBuf
+use FBC7 <(songTable-1)
+SIGNATURE_LEN    = 16                    ; "HARUHISA UDAGAWA"
+use FBF0 FC0F SIGNATURE_LEN
+use FDE4 SIGNATURE_LEN-1
+
+; ---- texts (PrintText / ClearTextRowAndPrint numbers)
+TXT_1UP          = $00
+TXT_HISCORE      = $01
+TXT_2UP          = $02
+TXT_MISSION      = $03                   ; story lines $03-$06
+TXT_SCORE_TABLE  = $05
+TXT_1_PLAYER     = $07                   ; title menu $07-$0A
+TXT_RIGHTS       = $0A
+TXT_LOGO0        = $0B                   ; title logo rows $0B-$10
+TXT_LOGO_NAMCOT  = $16
+TXT_PLAYER1      = $11                   ; + curPlayer
+TXT_GAME_OVER    = $13
+TXT_READY        = $14
+TXT_PAUSE        = $15
+TXT_BONUS_150    = $17                   ; flagship bonus values $17-$1A
+TXT_SCORE_ROW0   = $1B                   ; score table rows $1B-$1E
+TXT_2UP_LEFT     = $1F
+TXT_BLANK_ROW20  = $20
+TXT_BLANK_ROW18  = $21
+TXT_BORDER       = $22                   ; top border of the title logo (raw tiles)
+use E1EA TXT_READY
+use E20A E2B8 TXT_PLAYER1
+use E215 FF5E TXT_BLANK_ROW20
+use E220 TXT_BLANK_ROW18
+use E277 TXT_2UP_LEFT
+use E2A4 TXT_2UP_LEFT-1
+use E29B TXT_GAME_OVER
+use F839 TXT_LOGO0-1
+use F845 TXT_BORDER
+use F85B TXT_1_PLAYER-1
+use F879 TXT_2UP
+use F9DE TXT_LOGO_NAMCOT
+use F9F8 TXT_MISSION
+use FA29 TXT_SCORE_ROW0
+use FA38 TXT_BONUS_150
+use FA50 TXT_SCORE_ROW0+1
+use FF40 TXT_PAUSE
+TEXT_END         = '*'                   ; PrintText string terminator
+use FB93 TEXT_END
+TEXT_BIAS_ASCII  = '0' @textCharBias     ; texts stored as ASCII; tile = char - '0'
+INTRO_LOGO_ROWS  = 6
+INTRO_MENU_ROWS  = 4
+STORY_LINES      = 4
+SCORE_TABLE_ROWS = 3
+BONUS_TEXT_MASK  = 3                     ; 4 blinking bonus values
+GAME_OVER_CLEAR_STEPS = 4
+use F82B INTRO_LOGO_ROWS
+use F84C INTRO_MENU_ROWS
+use F9F4 STORY_LINES
+use FA4C SCORE_TABLE_ROWS
+use FA35 BONUS_TEXT_MASK
+use E2A0 GAME_OVER_CLEAR_STEPS
+
+; ---- APU
+SNDCHN_ALL       = $0F @SNDCHN           ; square 1, square 2, triangle, noise
+APU_FRAME_IRQ_OFF = $C0                  ; $4017: 5-step sequence, no frame IRQ
+SWEEP_OFF        = $7F
+APU_LENGTH_1     = $08                   ; length counter index 1 in a period-high write
+SQ1_TONE_VOL     = $BF                   ; duty 50%, constant volume 15
+use E0F8 F28F APU_FRAME_IRQ_OFF
+use E107 F0F1 F2A3 SWEEP_OFF
+use E102 F0EC SQ1_TONE_VOL
+use F0F8 F302 F318 F246 FF8F APU_LENGTH_1
+PAUSE_SQ2_VOL    = $A3
+PAUSE_SQ2_SWEEP  = $BB
+PAUSE_SQ2_LO     = $90
+PAUSE_SQ2_HI     = $19
+use E4FC PAUSE_SQ2_VOL
+use E501 PAUSE_SQ2_SWEEP
+use E506 PAUSE_SQ2_LO
+use E50B PAUSE_SQ2_HI
+EXPL_NOISE_START = 6 @explosionSound     ; noise period, +1 every 8 frames
+EXPL_NOISE_END   = $0E @explosionSound
+EXPL_VOL         = $0F
+EXPL_NOISE_HI    = $0A
+EXPL_SQ2_SWEEP   = $92
+EXPL_SQ2_HI      = $11
+EXPL_STEP_MASK   = 7
+use F1E9 EXPL_VOL
+use F1F9 EXPL_NOISE_HI
+use F1FE EXPL_SQ2_SWEEP
+use F203 EXPL_SQ2_HI
+use F20F EXPL_STEP_MASK
+SHOT_VOL         = 5
+SHOT_SQ2_SWEEP   = $84
+SHOT_SQ2_LO      = $16
+SHOT_NOISE_LO    = 6
+SHOT_SOUND_FRAMES = $28 @shotSound
+use F22A SHOT_VOL
+use F232 SHOT_SQ2_SWEEP
+use F237 SHOT_SQ2_LO
+use F241 F25C SHOT_NOISE_LO
+HUM_PERIOD_MASK  = $1F
+HUM_SQ2_VOL      = $95
+HUM_SQ2_SWEEP    = $A7
+HUM_SQ2_HI       = $52
+use F268 HUM_PERIOD_MASK
+use F274 HUM_SQ2_VOL
+use F279 HUM_SQ2_SWEEP
+use F283 HUM_SQ2_HI
+GAME_OVER_NOISE_VOL = $0F
+GAME_OVER_NOISE_LO = 5
+use FF85 GAME_OVER_NOISE_VOL
+use FF8A GAME_OVER_NOISE_LO
+SIREN_START      = $32 @diveSiren
+SIREN_END        = $F5 @diveSiren
+SIREN_WARBLE_MASK = 2
+SIREN_HIGH       = $C8
+SIREN_STEP_MASK  = 7
+use F0C9 SIREN_WARBLE_MASK
+use F0CD SIREN_HIGH
+use F0D1 SIREN_STEP_MASK
+SND_SCRATCH_SIZE = 16
+MUS_CHANNELS     = 4
+NOTE_MASK        = $1F                   ; note byte: duration index << 5 | note
+use F09C SND_SCRATCH_SIZE
+use F0A0 F0E1 MUS_CHANNELS
+use F16F NOTE_MASK*2
+; Music Player: the song is chosen by resetCounter (multiples of 45)
+MP_SQ_VOL        = $0F
+MP_TEMPO_SLOW    = $0F                   ; mpTempoMask
+MP_TEMPO_FAST    = $07
+MP_SONG1_PAGE    = $1B                   ; mpVramHi: CHR page of the song
+MP_SONG2_PAGE    = $18
+MP_SONG3_PAGE    = $06
+MP_SONG4_PAGE    = $16
+MP_SONG5_PAGE    = $1A
+MP_NOTE1_MASK    = $0F
+MP_NOTE2_MASK    = $1E
+use F29B MP_SQ_VOL
+use F2B0 F2C0 F2C8 F2D0 MP_TEMPO_SLOW
+use F2B8 MP_TEMPO_FAST
+use F2AE MP_SONG1_PAGE
+use F2B6 MP_SONG2_PAGE
+use F2BE MP_SONG3_PAGE
+use F2C6 MP_SONG4_PAGE
+use F2CE MP_SONG5_PAGE
+use F2B2 RESETS_AB_TRICK*2
+use F2BA RESETS_AB_TRICK*3
+use F2C2 RESETS_AB_TRICK*4
+use F2CA RESETS_AB_TRICK*5
+use F2F5 MP_NOTE1_MASK
+use F30C MP_NOTE2_MASK
+
+; ---- game modes (gameMode, GameModeTable) and sub-modes (gameSubMode)
+enum ; gameMode
+MODE_INTRO       = 0 @gameMode
+MODE_TITLE       = 1 @gameMode
+MODE_DEMO        = 2
+MODE_PLAY        = 3
+MODE_GAME_OVER_FLY_IN = 4
+MODE_GAME_OVER   = 5
+endenum
+TSUB_MENU        = 2                     ; TitleMode: TitleMenu
+GSUB_CHECK       = 3                     ; GameMode: CheckDeathOrWave
+use F89F TSUB_MENU
+use E4C2 GSUB_CHECK
+
+; ---- timing
+FRAMES_PER_SEC   = 60 @modeTimer @secondTimer @deathDelay
+GAME_OVER_TIME   = 2*FRAMES_PER_SEC
+FLAGSHIP_BONUS_TIME = 3*FRAMES_PER_SEC @flagshipBonusTimer
+STORY_LINE_FRAMES = $30
+use E6D4 FRAMES_PER_SEC
+use E297 E2AD GAME_OVER_TIME
+use F9E7 FA44 STORY_LINE_FRAMES
+SPLIT_DELAY_0    = 9                     ; timed loops for the scroll split (no sprite-0 hit)
+SPLIT_DELAY_1    = $EB
+SPLIT_DELAY_2    = $BE
+use F436 SPLIT_DELAY_0
+use FE2B SPLIT_DELAY_1
+use FE4D SPLIT_DELAY_2
+RNG_MIX_MASK     = $0F                   ; NMI: randomTable[frameTick & 15] += rngSeed (16 entries)
+use FE8E RNG_MIX_MASK
+PAUSE_BLINK_MASK = $18
+use FF5A PAUSE_BLINK_MASK
+
+; ---- player, shot and bullets
+START_LIVES      = 3
+HUD_LIVES        = 3
+HUD_FLAGS        = 5
+use E192 START_LIVES
+use F7BB HUD_LIVES-1
+use F7DC HUD_FLAGS
+use F7EA HUD_FLAGS-1
+enum ; playerState
+PLAYER_ALIVE     = 0 @playerState
+PLAYER_HIT       = 1 @playerState        ; explosion, counts up to $20
+PLAYER_WAITING   = $21 @playerState      ; waiting to spawn
+endenum
+use EA71 PLAYER_WAITING
+use EA77 PLAYER_WAITING-1
+SHIP_EXPL_STEP_MASK = $0E
+SHIP_EXPL_ROWS   = 3
+SHIP_EXPL_COLS   = 4
+use EA7E SHIP_EXPL_STEP_MASK
+use EA87 EAB6 SHIP_EXPL_ROWS
+use EA9D SHIP_EXPL_COLS
+PLAYER_X_MAX     = $6A @playerX          ; playerX is signed, 0 = centre
+use EA3E <-PLAYER_X_MAX
+SHIP_X           = $78                   ; ship sprite X = playerX + SHIP_X
+SHIP_W           = 16
+PLAYER_Y         = $D0                   ; Y the enemies aim at
+SHOT_X           = SHIP_X+SHIP_W/2-SPRITE_W/2
+use E089 E5E1 E834 E9D7 F59A SHIP_X
+use E0D5 SHIP_X+SHIP_W/2
+use E986 F56E SHOT_X
+use E99A F58B PLAYER_Y
+SHOT_READY_Y     = $C8 @oamBuffer+128    ; player shot sprite Y while it waits above the ship
+SHOT_FORMATION_Y = $A0 @oamBuffer+128    ; shot above this may hit the formation
+SHOT_SPEED       = 4
+AUTOFIRE_DELAY   = 3 @autoFireTimer      ; frames between shots while the button is held
+use F555 SHOT_SPEED
+ENEMY_BULLETS    = 7
+BULLET_SPEED     = 2
+use F4DE ENEMY_BULLETS
+use E045 ENEMY_BULLETS-1
+use E954 (ENEMY_BULLETS-1)*OAM_ENTRY
+use E3E1 (ENEMY_BULLETS+1)*OAM_ENTRY
+use F4FB BULLET_SPEED
+; bullet -> ship hit box: a narrow top part and a wide lower part
+BULLET_HIT_Y     = $CA
+BULLET_HIT_TOP_H = 5
+BULLET_HIT_H     = $11
+BULLET_HIT_X     = SHIP_X-1
+BULLET_HIT_W     = 11
+BULLET_HIT_TOP_X = SHIP_X+2
+BULLET_HIT_TOP_W = 5
+use F507 BULLET_HIT_Y
+use F509 BULLET_HIT_TOP_H
+use F50D BULLET_HIT_H
+use F513 BULLET_HIT_X
+use F517 BULLET_HIT_W
+use F520 BULLET_HIT_TOP_X
+use F524 BULLET_HIT_TOP_W
+; diver -> ship collision box
+CRASH_Y          = $87
+CRASH_TOP_H      = 5
+CRASH_H          = $13
+CRASH_X          = SHIP_X-11
+CRASH_W          = $17
+CRASH_TOP_X      = SHIP_X-8
+CRASH_TOP_W      = $11
+use E7BF CRASH_Y
+use E7C1 CRASH_TOP_H
+use E7C5 CRASH_H
+use E7CB CRASH_X
+use E7CF CRASH_W
+use E7D8 CRASH_TOP_X
+use E7DC CRASH_TOP_W
+; shot -> diver hit box
+SHOT_HIT_DX      = 2
+SHOT_HIT_DY      = 6
+DIVER_HIT_W      = 12
+DIVER_HIT_H      = 13
+ALIEN_HIT_W      = 13                    ; formation alien, inside a 16 px column
+use EE63 SHOT_HIT_DX
+use EE6A <-DIVER_HIT_W
+use EE72 SHOT_HIT_DY
+use EE79 <-DIVER_HIT_H
+use EEF0 ALIEN_HIT_W
+
+; ---- score
+SCORE_DIGITS     = 6
+SCORE_AREA_SIZE  = 26
+SCORE_HUD_BYTES  = 15                    ; UpdateHudScores copies scoreP1..hiScore+5 to hudScore
+SCORE_THOUSANDS  = 2                     ; digit index in AddScore
+EXTRA_LIFE_THOUSANDS = 5                 ; extra life at 5000
+HISCORE_INIT_THOUSANDS = 5               ; high score 5000 at power-on
+SCORE_IDX_DIVING = 6                     ; scoreAdd row: diving alien = row + 6
+SCORE_IDX_FLAGSHIP = 12                  ; flagship bonus = diverType + 12
+use E441 scoreP2-scoreArea
+use E443 FEBB FEC6 FEDC SCORE_DIGITS-1
+use F766 scoreP1+4-scoreArea
+use F76C F782 SCORE_DIGITS-2
+use FD3C SCORE_AREA_SIZE-1
+use FEAC SCORE_HUD_BYTES-1
+use F793 SCORE_THOUSANDS
+use F79A EXTRA_LIFE_THOUSANDS
+use FD51 HISCORE_INIT_THOUSANDS
+use EECE SCORE_IDX_DIVING
+use EEA6 SCORE_IDX_FLAGSHIP
+
+; ---- formation
+FORMATION_COLUMNS = 10
+FORMATION_ROWS   = 6
+ROW_RED          = 4                     ; row 4 = red escorts (also their score index)
+ROW_FLAGSHIP     = 5
+FORM_RED         = $10 @formation        ; formation column bits: 0-2 blue, 3 purple, 4 red, 5 flagship
+FORM_FLAGSHIP    = $20 @formation
+FLAGSHIP_COL_FIRST = 3                   ; columns that hold flagships
+FLAGSHIP_COL_LAST = 6
+COLUMN_W         = 16
+ROW_HEIGHT       = 12
+FORMATION_LEFT_X = $30                   ; column X = col * 16 + $30 + formationX
+FORMATION_RIGHT_X = FORMATION_LEFT_X+FORMATION_COLUMNS*COLUMN_W-SPRITE_W
+FORMATION_BOTTOM_Y = $64                 ; Y of row 0; rows go up by ROW_HEIGHT
+BOUNCE_MARGIN    = $28                   ; formation turns this far from the screen edge
+FORMATION_SPEED  = 20                    ; motionNum of the formation drift (/100 px per frame)
+FORMATION_LEFT   = $80 @formationDir
+FLAP_PERIOD      = 10 @flapTimer
+FLAP_TIMER_END   = $F4 @flapTimer
+FLAP_PHASE_MASK  = 3                     ; (flapPhase - column) & 3, with the row parity -> AlienTilesByFlap
+MAX_STAGE        = 99
+use E170 E377 E3A1 E4A4 E4D7 ECE1 EDCB EDF0 F0B0 FORMATION_COLUMNS-1
+use E25C ECC8 FORMATION_COLUMNS
+use F04F FORMATION_COLUMNS
+use F065 FORMATION_ROWS-1
+use EF00 FORMATION_ROWS*ROW_HEIGHT
+use ED1A ED25 ROW_RED
+use ECF6 ED12 ROW_FLAGSHIP
+use EAFC ROW_FLAGSHIP-1
+use ED21 FORM_RED
+use ECF2 ED0E E3B9 F01A FORM_FLAGSHIP
+use EBD8 F018 FLAGSHIP_COL_LAST
+use EBFE FLAGSHIP_COL_LAST-1
+use EBF5 FLAGSHIP_COL_FIRST
+use EBE1 FLAGSHIP_COL_FIRST+1
+use F021 FLAGSHIP_COL_FIRST-1
+use EDD8 EDFD COLUMN_W
+use EEEE COLUMN_W-1
+use EEE9 FORMATION_COLUMNS*COLUMN_W
+use EF08 ROW_HEIGHT
+use E604 ED94 EF41 FORMATION_LEFT_X
+use EEE7 FORMATION_LEFT_X-SHOT_HIT_DX
+use EDEE FORMATION_LEFT_X+SPRITE_W
+use EDCD FORMATION_RIGHT_X
+use E623 EDA4 EF4F FORMATION_BOTTOM_Y
+use EEF8 FORMATION_BOTTOM_Y+SPRITE_W
+use EDE2 EE08 BOUNCE_MARGIN
+use E145 FORMATION_SPEED
+use EB13 FLAP_PHASE_MASK
+use E397 MAX_STAGE
+COUNT_PHASE_MASK = $0F                   ; CountAliens: one column per frame, frames 0-9 of 16
+use F04D COUNT_PHASE_MASK
+
+; ---- divers (diverState, DiverStateDispatch)
+enum ; diverState (DiverStateDispatch)
+DIVER_IDLE       = 0 @diverState
+DIVER_PEEL_OFF   = 1 @diverState
+DIVER_DIVE       = 2 @diverState
+DIVER_REENTER    = 3 @diverState
+DIVER_REJOIN     = 4 @diverState
+DIVER_REMOVE     = 5 @diverState
+DIVER_LOOP       = 6 @diverState
+DIVER_DIVE2      = 7 @diverState         ; 7-10: states 2-5 again after a loop
+DIVER_REENTER2   = 8 @diverState
+DIVER_REJOIN2    = 9 @diverState
+DIVER_REMOVE2    = 10 @diverState
+DIVER_EXPLODE    = 11 @diverState @diverState+7
+DIVER_SCORE      = 12 @diverState        ; flagship bonus shown in place of the sprite
+endenum
+DIVER_SLOTS      = 8
+DIVER_SLOT_EXPLOSION = 7                 ; diver slot of a formation alien that was hit
+LAST_ESCORT_SLOT = 2                     ; slots 1-2 = escorts
+DIVER_OAM_SIZE   = 16                    ; 4 sprites per diver slot
+use E69E EF60 DIVER_SLOT_EXPLOSION
+use EF5C DIVER_SLOT_EXPLOSION*DIVER_OAM_SIZE
+use E179 E49A E511 DIVER_SLOTS-1
+use E515 (DIVER_SLOTS-1)*DIVER_OAM_SIZE
+use EE37 DIVER_SLOT_EXPLOSION-1
+use EE3B (DIVER_SLOT_EXPLOSION-1)*DIVER_OAM_SIZE
+use E51F EE45 FA12 DIVER_OAM_SIZE
+use FA63 2*DIVER_OAM_SIZE
+use EC85 ECA4 LAST_ESCORT_SLOT
+DIVER_TYPE_ESCORT = ROW_RED
+DIVER_SHOTS      = 2                     ; bullets per dive (+1 from stage 1)
+use E9CF DIVER_SHOTS
+DIR_COUNT        = 24                    ; directions (diverDir / 4 indexes the Dir* tables)
+QUADRANT_MASK    = 3
+use E56B DIR_COUNT
+use E581 DIR_COUNT-1
+use E58B E63A E81B F63C DIR_COUNT/2
+DIR_SLOPE_1      = $11                   ; DirectionFromDelta: 128 * small / large axis = tan 7.5/22.5/37.5 deg
+                                         ; (15-degree sectors, 7 directions per quadrant)
+DIR_SLOPE_2      = $35
+DIR_SLOPE_3      = $62
+use F5E9 F605 DIR_SLOPE_1
+use F5EF F60B DIR_SLOPE_2
+use F5F5 F611 DIR_SLOPE_3
+MOTION_DIV       = 100                   ; motion speed = motionNum / 100 px per frame
+MOTION_OBJECTS   = 24
+MOTION_LEFT      = $80                   ; motionDir bit 7: negative step (alien bullet aimed left of it)
+use E13B E54C ED4F MOTION_DIV
+use F389 MOTION_OBJECTS-1
+use E992 MOTION_LEFT
+LETTER_MOTION_DIV = 60                   ; GAME OVER letters
+GAME_OVER_Y      = $A0
+use E2F0 LETTER_MOTION_DIV
+use E301 GAME_OVER_Y
+REJOIN_SPEED     = 13                    ; motionNum+9 while rejoining: drives the landing turn (diverDir += step)
+REJOIN_DROP_BIAS = 12                    ; ~(diverDropY - 12): diverDropY still holds the launch side (0 or
+                                         ; PEEL_DIR_LEFT), so bit 7 = turn direction of the landing
+REJOIN_TURN_FRAMES = $1E                 ; last frames of the drop: motionDiv+9 = $1E starts the turn back up
+use E62A REJOIN_SPEED
+use E60E REJOIN_DROP_BIAS
+use E657 REJOIN_TURN_FRAMES
+EXPLOSION_FRAMES = $10
+EXPLOSION_FRAME_MASK = $0C
+use E694 EXPLOSION_FRAMES
+use E6B8 EXPLOSION_FRAME_MASK
+DIVER_LOOP_DIR   = $80                   ; diverTargetX in a loop: bit 7 = ship to the right (turn direction),
+                                         ; bits 0-1 = frame counter (turn every 4 frames)
+LOOP_COUNT_MASK  = 3
+LOOP_ZONE_Y      = $90
+LOOP_ZONE_H      = $30
+use E559 DIVER_LOOP_DIR|LOOP_COUNT_MASK
+use E55E E83C LOOP_COUNT_MASK
+use E83A DIVER_LOOP_DIR
+use E802 LOOP_ZONE_Y
+use E805 <-LOOP_ZONE_H
+OFFSCREEN_WRAP_DX = $14
+use E852 E858 OFFSCREEN_WRAP_DX
+HUD_BOTTOM_Y     = $28                   ; divers with sprite Y < this get OAM_BEHIND (hidden by the HUD)
+use E8B7 HUD_BOTTOM_Y
+FIRE_ZONE_Y      = $40                   ; divers fire between these Y, every 16 px
+FIRE_ZONE_H      = $58
+FIRE_EVERY_MASK  = $0F
+use E7A1 FIRE_ZONE_Y
+use E7A3 FIRE_ZONE_H
+use E7A7 FIRE_EVERY_MASK
+AIM_DX_MIN       = $30
+AIM_DX_MAX       = $70
+TARGET_X_MAX     = $F0
+AIM_MAX_Y        = $C0
+use E9E6 E9EA AIM_DX_MIN
+use E9EC E9F0 AIM_DX_MAX
+use E9FD TARGET_X_MAX+SPRITE_W
+use EA01 TARGET_X_MAX
+use EA14 SPRITE_W
+use F586 AIM_MAX_Y
+
+; ---- attacks
+ATTACK_TIMERS    = 13
+ATTACK_TYPES     = 3
+LAUNCH_TICK_MASK = 3
+PEEL_DIR_LEFT    = DIR_COUNT*4+3         ; initial diverDir of a left peel-off (turns down to DIR_COUNT/2*4;
+                                         ; right side starts at 0 and turns up)
+FEW_ALIENS       = 7                     ; below this (player alive) divers that left the screen dive again
+MANY_ALIENS      = $1B                   ; flagship attacks are launched only with fewer aliens than this
+FLAGSHIP_LAUNCH_TIME = $4E               ; flagship attack starts when flagshipAttackTimer reaches this;
+                                         ; single launches wait while the timer is not 0
+FLAGSHIP_ATTACK_DELAY = $96 @flagshipAttackTimer
+DIFFICULTY_STEP_SECS = 20 @difficultyTimer
+MAX_DIFFICULTY   = 7 @difficulty
+MAX_STAGE_DIFFICULTY = MAX_DIFFICULTY
+use E3C4 ATTACK_TIMERS-1
+use EFCB DIVER_SLOTS-1
+use ECB8 ECDA ATTACK_TYPES-1
+use EFC0 LAUNCH_TICK_MASK
+use EBF1 ECB4 PEEL_DIR_LEFT
+use E5C8 FEW_ALIENS
+use EF87 MANY_ALIENS
+use EF81 FLAGSHIP_LAUNCH_TIME
+use E3CD MAX_DIFFICULTY
+
+; ---- stars
+STARS            = 24
+STAR_FIRST_Y     = 16
+STAR_SPACING_Y   = 9
+STAR_WRAP_Y      = $E4
+STAR_RESTART_Y   = $0C
+STAR_BLINK_MASK  = 7
+STAR_BLINK_DX    = $80
+use E3F5 EB9F (STARS-1)*OAM_ENTRY
+use E3F7 STARS-1
+use E3F9 STAR_FIRST_Y
+use E418 STAR_SPACING_Y
+use EBA7 STAR_WRAP_Y
+use EBAF <(STAR_RESTART_Y-STAR_WRAP_Y)
+use EBB7 STAR_BLINK_MASK
+use EBBF STAR_BLINK_DX
+
+; ---- title, menu, story
+TITLE_SCROLL_START = $EF @titleScrollTimer @scrollY
+SCROLL_TOP       = $FF @scrollY
+SCROLL_LOGO_Y    = $30 @scrollY          ; title: from this scrollY on, palette entry PAL_TITLE_ENTRY is white
+                                         ; (red before) and the BG/sprite pattern tables are swapped
+use F452 SCROLL_LOGO_Y
+use FC44 SCROLL_TOP
+MENU_HOLD_INIT   = $80 @menuHoldTimer
+MENU_HOLD_FRAMES = 3 @menuHoldTimer
+MENU_CURSOR_X    = $50
+MENU_TOP_Y       = $80
+TITLE_MARK_Y     = $5A
+TITLE_MARK1_X    = $75
+TITLE_MARK2_X    = $5B
+TITLE_MARK3_X    = $A2
+use F918 MENU_CURSOR_X
+use F951 F9A7 MENU_TOP_Y
+use F93A TITLE_MARK_Y
+use F928 TITLE_MARK1_X
+use F92D TITLE_MARK2_X
+use F932 TITLE_MARK3_X
+STORY_ALIEN_X    = $38
+STORY_FLAGSHIP_Y = $84
+SCORE_TABLE_Y    = $94
+use FA1B FA76 STORY_ALIEN_X
+use FA16 STORY_FLAGSHIP_Y
+use FA6A SCORE_TABLE_Y
+WIPE_COLUMNS     = $20 @wipeTimer
+PAUSE_X_CENTER   = $84
+PAUSE_X_MIN      = $30
+PAUSE_X_MAX      = $D0
+use FF29 PAUSE_X_CENTER
+use FF2B FF2F FF38 PAUSE_X_MIN
+use FF31 PAUSE_X_MAX+1
+use FF35 PAUSE_X_MAX
+
+; ---- demo AI
+DEMO_RETARGET_MASK = $7F                 ; new random target every 128 frames
+DEMO_TARGET_MASK = $3F
+DEMO_TARGET_MIN  = $60
+DEMO_DODGE_MARGIN = 12
+DEMO_DODGE_WIDTH = 2*DEMO_DODGE_MARGIN+SPRITE_W
+DEMO_DODGE_SPLIT = 3
+DEMO_BULLET_MAX_Y = $D8
+DEMO_DANGER_Y    = $A0
+DEMO_CHASE_MIN_Y = $60
+DEMO_FIRE_Y      = $B8
+DEMO_CHASE_DEADZONE = 3
+use E01A DEMO_RETARGET_MASK
+use E021 DEMO_TARGET_MASK
+use E023 DEMO_TARGET_MIN
+use E041 SHIP_X-DEMO_DODGE_MARGIN
+use E050 DEMO_DODGE_WIDTH
+use E070 SHIP_X+DEMO_DODGE_SPLIT
+use E057 DEMO_BULLET_MAX_Y
+use E068 DEMO_DANGER_Y
+use E082 DEMO_CHASE_MIN_Y
+use E097 DEMO_FIRE_Y
+use E0AA DEMO_CHASE_DEADZONE
+
+; ---- reset / watchdog / music player tricks
+RESETS_MIC_TRICK = 10 @resetCounter      ; TCRF method 2: 10 resets, then shout into the microphone
+RESETS_AB_TRICK  = 45 @resetCounter      ; TCRF method 1: 44 resets, A+B on controller 2, reset again
+MIC_SHOUTS       = 4 @micShoutCount
+NMI_STACK_MIN    = $30                   ; watchdog: S below this in NMI -> reset
+use FDB7 NMI_STACK_MIN
+use F21A EXPL_NOISE_END
+use F255 SHOT_SOUND_FRAMES
+GAME_OVER_LETTERS = 8                    ; flying letters of GAME OVER
+use E330 FFC2 GAME_OVER_LETTERS
+FLAGSHIP_FROM_RIGHT = $FF @flagshipDir   ; 0 = attack from the left
+
+; ---- font and data in CHR ROM (src/chr.asm)
+CHR_TABLE1       = $1000                 ; pattern table 1 (chr_1.chr)
+TILE_PTS         = $A0                   ; "PTS" (3 tiles) of the score table
+TILE_COLON       = $A3
+CHAR_PTS         = TILE_PTS+TEXT_BIAS_ASCII
+CHAR_COLON       = TILE_COLON+TEXT_BIAS_ASCII
+use FC8F >songTable
+; tune note byte = DUR_x | NOTE_x (NoteDuration / NotePeriod index)
+DUR_1            = $00                   ; frames
+DUR_2            = $20
+DUR_4            = $40
+DUR_8            = $60
+DUR_16           = $80
+DUR_32           = $A0
+DUR_64           = $C0
+SONG_END         = $FF
+NOTE_REST        = $00
+NOTE_F4          = $01
+NOTE_As4         = $02
+NOTE_C5          = $03
+NOTE_Cs5         = $04
+NOTE_D5          = $05
+NOTE_Ds5         = $06
+NOTE_F5          = $07
+NOTE_G5          = $08
+NOTE_A5          = $09
+NOTE_As5         = $0A
+NOTE_C6          = $0B
+NOTE_D6          = $0C
+NOTE_Ds6         = $0D
+NOTE_F6          = $0E
+NOTE_G6          = $0F
+NOTE_A6          = $10
+NOTE_As6         = $11
+NOTE_C7          = $12
+NOTE_D7          = $13                   ; 50 cents flat: between C#7 and D7
+NOTE_Ds7         = $14
+NOTE_F7          = $15
+NOTE_G4          = $16
+NOTE_A4          = $17
+NOTE_Fs5         = $18
+NOTE_B5          = $19
+NOTE_Fs6         = $1A
+NOTE_B6          = $1B
+NOTE_Gs6         = $1C
+NOTE_G7          = $1D
+NOTE_Gs7         = $1E
+NOTE_OFF         = $1F                   ; period 0 = silence
+CHR_ICONS        = $1600                 ; tiles $60-$6F (HUD icons) inside the copied text block
+
+; ---- data tables in PRG (data AAAA EXPR, ...)
+data E335 'G'-'0', 'A'-'0', 'M'-'0', 'E'-'0', 'O'-'0', 'V'-'0', 'E'-'0', 'R'-'0' ; tile = char - TEXT_BIAS_ASCII
+FORM_BLUE        = $07                   ; formation column bits 0-2: blue rows 0-2
+FORM_PURPLE      = $08
+FORM_COL_BLUE    = FORM_BLUE             ; column contents
+FORM_COL_PURPLE  = FORM_COL_BLUE|FORM_PURPLE
+FORM_COL_RED     = FORM_COL_PURPLE|FORM_RED
+FORM_COL_FLAGSHIP = FORM_COL_RED|FORM_FLAGSHIP
+data E3EB FORM_COL_BLUE, FORM_COL_PURPLE, FORM_COL_RED, FORM_COL_FLAGSHIP, FORM_COL_RED
+data E3F0 FORM_COL_RED, FORM_COL_FLAGSHIP, FORM_COL_RED, FORM_COL_PURPLE, FORM_COL_BLUE
+data ECD0 FORM_FLAGSHIP, FORM_RED, FORM_COL_PURPLE
+data E450 0, 0, TILE_BLANK, TILE_BLANK, TILE_BLANK, TILE_BLANK
+TILE_SCORE_150   = $80                   ; flagship bonus sprites (2 x 2 tiles each)
+TILE_SCORE_200   = $84
+TILE_SCORE_300   = $88
+TILE_SCORE_800   = $8C
+data E6EC TILE_SCORE_150, TILE_SCORE_200, TILE_SCORE_300, TILE_SCORE_300, TILE_SCORE_800, TILE_SCORE_150
+data EA65 <(PPU_NT0+28*NT_ROW_SIZE+14), <(PPU_NT0+26*NT_ROW_SIZE+14)
+data EA67 <(PPU_NT0+28*NT_ROW_SIZE+16), <(PPU_NT0+26*NT_ROW_SIZE+16)
+data EDC0 0, 0, 0, 0, 0, FLAGSHIP_TILE_OFFSET
+data EF6C 1<<0, 1<<1, 1<<2, 1<<3, 1<<4, 1<<5, 1<<6, 1<<7
+data F033 %00000001, %00000011, %00000111, %00001111, %00011111, %00111111, %01111111, %11111111
+data F4C1 BTN_A|BTN_B, BTN_A|BTN_B, BTN_SELECT, BTN_START, BTN_UP, BTN_DOWN, BTN_LEFT, BTN_RIGHT
+data F5D0 OAM_FLIP_V, OAM_FLIP_V|OAM_FLIP_H, 0, OAM_FLIP_H
+data FF79 MODE_PLAY
+data FF7A MODE_TITLE
+data FF7B MODE_GAME_OVER
+data F1CF DUR_8|NOTE_As4, DUR_4|NOTE_OFF, DUR_8|NOTE_As4, DUR_4|NOTE_OFF, DUR_8|NOTE_As4, DUR_4|NOTE_OFF, DUR_8|NOTE_As4, DUR_4|NOTE_OFF
+data F1D7 DUR_8|NOTE_As4, DUR_4|NOTE_OFF, DUR_8|NOTE_As4, DUR_4|NOTE_OFF, DUR_8|NOTE_As4, DUR_4|NOTE_OFF, DUR_8|NOTE_As4, SONG_END
+COLOR_BLACK      = $0F
+COLOR_BLUE       = $11
+COLOR_GREEN      = $1A
+COLOR_VIOLET     = $23
+COLOR_ORANGE     = $27
+COLOR_CYAN       = $2C
+data FD59 COLOR_BLACK, COLOR_RED, COLOR_WHITE, COLOR_CYAN ; BG 0: text
+data FD5D COLOR_BLACK, COLOR_RED, COLOR_BLUE, COLOR_ORANGE ; BG 1
+data FD61 COLOR_BLACK, COLOR_VIOLET, COLOR_BLUE, COLOR_ORANGE ; BG 2
+data FD65 COLOR_BLACK, COLOR_GREEN, COLOR_BLUE, COLOR_ORANGE ; BG 3
+data FD69 COLOR_BLACK, COLOR_WHITE, COLOR_BLUE, COLOR_ORANGE ; sprites 0
+data FD6D COLOR_BLACK, COLOR_RED, COLOR_BLUE, COLOR_ORANGE ; sprites 1
+data FD71 COLOR_BLACK, COLOR_VIOLET, COLOR_BLUE, COLOR_ORANGE ; sprites 2
+data FD75 COLOR_BLACK, COLOR_GREEN, COLOR_BLUE, COLOR_ORANGE ; sprites 3
+; ---- period tables (comments only: the values are the data)
+data F185 $00, $00 ; NOTE_REST: silence
+data F187 $3E, $01 ; NOTE_F4: F4 351 Hz
+data F189 $EF, $00 ; NOTE_As4: A#4 466 Hz
+data F18B $D4, $00 ; NOTE_C5: C5 525 Hz
+data F18D $C9, $00 ; NOTE_Cs5: C#5 554 Hz
+data F18F $BD, $00 ; NOTE_D5: D5 589 Hz
+data F191 $B3, $00 ; NOTE_Ds5: D#5 621 Hz
+data F193 $9F, $00 ; NOTE_F5: F5 699 Hz
+data F195 $8E, $00 ; NOTE_G5: G5 782 Hz
+data F197 $7E, $00 ; NOTE_A5: A5 881 Hz
+data F199 $77, $00 ; NOTE_As5: A#5 932 Hz
+data F19B $6A, $00 ; NOTE_C6: C6 1045 Hz
+data F19D $5F, $00 ; NOTE_D6: D6 1165 Hz
+data F19F $59, $00 ; NOTE_Ds6: D#6 1243 Hz
+data F1A1 $50, $00 ; NOTE_F6: F6 1381 Hz
+data F1A3 $47, $00 ; NOTE_G6: G6 1554 Hz
+data F1A5 $3F, $00 ; NOTE_A6: A6 1748 Hz
+data F1A7 $3B, $00 ; NOTE_As6: A#6 1864 Hz
+data F1A9 $35, $00 ; NOTE_C7: C7 2071 Hz
+data F1AB $30, $00 ; NOTE_D7: D7 2283 Hz
+data F1AD $2C, $00 ; NOTE_Ds7: D#7 2486 Hz
+data F1AF $28, $00 ; NOTE_F7: F7 2728 Hz
+data F1B1 $1C, $01 ; NOTE_G4: G4 392 Hz
+data F1B3 $FD, $00 ; NOTE_A4: A4 440 Hz
+data F1B5 $96, $00 ; NOTE_Fs5: F#5 741 Hz
+data F1B7 $71, $00 ; NOTE_B5: B5 981 Hz
+data F1B9 $4B, $00 ; NOTE_Fs6: F#6 1472 Hz
+data F1BB $38, $00 ; NOTE_B6: B6 1962 Hz
+data F1BD $43, $00 ; NOTE_Gs6: G#6 1645 Hz
+data F1BF $23, $00 ; NOTE_G7: G7 3107 Hz
+data F1C1 $20, $00 ; NOTE_Gs7: G#7 3390 Hz
+data F1C3 $00, $00 ; NOTE_OFF: silence
+data F32C $00, $00 ; SQ2 note 0: silence
+data F32E $00, $6B ; SQ2 note 1: C6 1036 Hz
+data F330 $00, $71 ; SQ2 note 2: B5 981 Hz
+data F332 $00, $7F ; SQ2 note 3: A5 874 Hz
+data F334 $00, $8F ; SQ2 note 4: G5 777 Hz
+data F336 $00, $A0 ; SQ2 note 5: F5 695 Hz
+data F338 $00, $AA ; SQ2 note 6: E5 654 Hz
+data F33A $00, $BE ; SQ2 note 7: D5 586 Hz
+data F33C $00, $D6 ; SQ2 note 8: C5 520 Hz
+data F33E $00, $E2 ; SQ2 note 9: B4 493 Hz
+data F340 $00, $FE ; SQ2 note A: A4 439 Hz
+data F342 $01, $0D ; SQ2 note B: G#4 414 Hz
+data F344 $00, $87 ; SQ2 note C: G#5 823 Hz
+data F346 $00, $CA ; SQ2 note D: C#5 551 Hz
+data F348 $00, $B4 ; SQ2 note E: D#5 618 Hz
+data F34A $00, $97 ; SQ2 note F: F#5 736 Hz
+data F34C $00, $00 ; SQ1 note 0: silence
+data F34E $05, $4D ; SQ1 note 1: E2 82 Hz
+data F350 $05, $01 ; SQ1 note 2: F2 87 Hz
+data F352 $04, $75 ; SQ1 note 3: G2 98 Hz
+data F354 $03, $F9 ; SQ1 note 4: A2 110 Hz
+data F356 $03, $8A ; SQ1 note 5: B2 123 Hz
+data F358 $03, $57 ; SQ1 note 6: C3 131 Hz
+data F35A $02, $FA ; SQ1 note 7: D3 147 Hz
+data F35C $02, $CF ; SQ1 note 8: D#3 155 Hz
+data F35E $02, $A7 ; SQ1 note 9: E3 165 Hz
+data F360 $02, $81 ; SQ1 note A: F3 174 Hz
+data F362 $02, $5D ; SQ1 note B: F#3 185 Hz
+data F364 $02, $3B ; SQ1 note C: G3 196 Hz
+data F366 $02, $1B ; SQ1 note D: G#3 207 Hz
+data F368 $01, $FC ; SQ1 note E: A3 220 Hz
+data F36A $01, $C5 ; SQ1 note F: B3 246 Hz
+OP_BIT_ABS       = $2C                   ; opcode of BIT abs, used to skip a 2-byte instruction
+data F768 OP_BIT_ABS ; = BIT $17A0: skips LDY #$17 below
+use F769 scoreP2+4-scoreArea

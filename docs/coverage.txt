@@ -1,0 +1,43 @@
+Galaxian PRG coverage ($E000-$FFFF, 8192 bytes)
+
+code (CDL)        7030
+code (traced)      351
+data               665
+word tables        146
+unknown              0
+
+Unknown runs:
+
+Traced code (not in CDL):
+  $E284-$E28D
+  $E39B-$E39C
+  $E5B5-$E5BD
+  $E825-$E830
+  $E9F0-$E9F1
+  $EA01-$EA06
+  $ED0D-$ED0D
+  $F289-$F32B
+  $F4AE-$F4BF
+  $FBFA-$FC05
+  $FD3C-$FD58
+  $FDD4-$FDF9
+  $FE01-$FE1B
+  $FF2F-$FF30
+  $FF35-$FF36
+
+Detected word tables (start, words, strong, weak, rts-adj, referenced):
+  $E008   5   5   0 0 False
+  $E0EC   3   3   0 0 False
+  $E1CF   4   4   0 0 False
+  $E461   9   9   0 0 False
+  $E530  14  14   0 0 False
+  $E8E2   4   4   0 0 False
+  $F81C   5   5   0 0 False
+  $F8C0  13  13   0 0 False
+  $FFCC   4   4   0 0 False
+
+Immediate pairs #<label/#>label: 0
+
+Raw operands (outside RAM/registers/ROM):
+
+CDL anomalies (code flag on bytes that do not decode):

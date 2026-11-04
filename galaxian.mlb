@@ -1,0 +1,711 @@
+P:2000:DemoMode:attract mode: the game plays itself (same sub-modes as GameMode)
+P:2012:DemoPlayLoop:demo AI: new random demoTargetX every 128 frames, the three AI steps build curJoy
+P:2028:DemoPlayLoop_skip
+P:203A:DemoAiDodgeBullets:move away from the lowest enemy bullet near the ship
+P:2047:DemoAiDodgeBullets_loop
+P:2063:DemoAiDodgeBullets_skip
+P:2079:DemoAiDodgeBullets_rts
+P:207A:DemoAiChaseDiver:follow the diver in slot 3 (OAM $0230) and fire under it
+P:209F:DemoAiChaseDiver_skip
+P:20B4:DemoAiChaseDiver_skip2
+P:20B9:DemoAiChaseDiver_skip3
+P:20C2:DemoAiChaseDiver_rts
+P:20C3:DemoAiMoveToTarget:walk to demoTargetX, fire whenever the shot is ready
+P:20D2:DemoAiMoveToTarget_skip
+P:20DE:DemoPressRight:demo AI: curJoy = Right
+P:20E2:DemoPressLeft:demo AI: curJoy = Left
+P:20E4:DemoSetJoy:demo AI: A = button bits -> curJoy
+P:20E6:DemoAiRts
+P:20E7:IntroMode:gameMode 0: InitApu, IntroTextSequence, IntroToTitle (by gameSubMode)
+P:20F2:InitApu:enable all channels, frame IRQ off, SQ1 constant volume, no sweep
+P:210D:IntroToTitle:gameMode = 1, init stars, blank HUD, print text 1
+P:211A:IntroToTitle_loop
+P:2133:InitNewGame:lives 3, stage 0, formation drift 20/100 px, 2P setup from menuSelect
+P:2172:InitNewGame_loop
+P:217D:InitNewGame_loop2
+P:21AB:InitNewGame_rts
+P:21AC:CheckDeathOrWave:player dead -> swap players / game over; next wave check
+P:21BA:CheckDeathOrWave_skip
+P:21BD:CheckDeathOrWave_skip2
+P:21C3:PlayerDeathSequence:gameSubMode 6: GameFrame + steps by subStep (life lost, "PLAYER n", wait $3C frames)
+P:21D7:DeathStep0:steps of PlayerDeathSequence (by subStep): ship hit -> lose a life, text $14
+P:21EF:DeathStep0_skip
+P:21F3:DeathStepRts
+P:21F4:DeathStep1:deathDelay = 1 s; 2-player game: print PLAYER n
+P:220F:DeathStep2:after deathDelay: clear text row 20
+P:221A:DeathStep3:clear text row 18, next gameSubMode
+P:2225:SwapPlayers:2P game: swap extra life, lives, stage, flagshipRespawn, formation; curPlayer ^= 1
+P:2229:SwapPlayersNow:exchange the current and the other player's state (lives, stage, flagships, extra life, ...)
+P:2253:SwapPlayersNow_loop
+P:2279:SwapPlayersNow_skip
+P:227D:GameOverCheck:2P: "GAME OVER PLAYER n" and continue with the other player; else letters + mode 4.
+P:228E:GameOverCheck_loop
+P:228F:GameOverCheck_skip
+P:22A0:GameOverCheck_skip2
+P:22A9:GameOverCheck_skip3
+P:22BF:GameOverCheck_skip4
+P:22DD:StartGameOverLetters:8 letter sprites at random places, motion objects 0-15 bring them to Y=$A0 in $3C frames
+P:22E1:StartGameOverLetters_loop
+P:230A:StartGameOverLetters_skip
+P:2328:StartGameOverLetters_skip2
+P:2334:StartGameOverLettersRts
+P:2335:GameOverTiles:"GAMEOVER"
+P:233D:GameOverLetterX:final X of each GAME OVER letter
+P:2345:SpawnPlayer:waits until the start tune ends (musTimer+3 = 0), draws the ship, playerState = 0
+P:2374:NextWaveCheck:formation empty -> next stage (wraps at 99), new formation
+P:2381:NextWaveCheck_loop
+P:239D:NextWaveCheck_skip
+P:239F:InitFormation:A = formationX; fill formation from FormationColumnMasks, restore surviving flagships of the stage
+P:23A3:InitFormation_loop
+P:23B1:RestoreFlagship:flagshipRespawn,X -> put the flagship back into column 4+X
+P:23BF:RestoreFlagshipRts
+P:23C0:InitWaveVars:clear attack timers, difficulty = min(stage, 7)
+P:23C6:InitWaveVars_loop
+P:23D3:InitWaveVars_skip
+P:23D6:InitBulletSprites:tiles of the shot ($30) and the 7 enemy bullets ($37)
+P:23DA:InitBulletSprites_loop
+P:23EB:FormationColumnMasks:initial bitmask of each of the 10 columns (flagships in columns 3 and 6)
+P:23F5:InitStars:24 star sprites at OAM $02A0: Y = 16 + 9*i, X and palette from StarX
+P:23FD:InitStars_loop
+P:2424:StarX:per star: X position; bits 0-1 also the sprite palette
+P:243C:ResetBothScores:scoreP1 and scoreP2 = "    00"
+P:2443:ResetScores:X = 1 (P1) / $13 (P2): score = ScoreInitDigits ("    00")
+P:2445:ResetScores_loop
+P:2450:ScoreInitDigits:"    00" (stored backwards)
+P:2456:GameMode:the real game
+P:2473:GameFrame:one frame of play: hits, attacks, player, bullets, divers, BG tiles, formation drift
+P:2497:CheckWaveEnd:no divers left and (formation empty or player hit): after $3C frames gameSubMode 3,
+P:249C:CheckWaveEnd_loop
+P:24A8:CheckWaveEnd_loop2
+P:24C6:CheckWaveEnd_skip
+P:24CA:CheckWaveEnd_rts
+P:24CB:CheckWaveEnd_skip2
+P:24D7:CheckFormationEmpty:waveCleared = all 10 columns empty
+P:24D9:CheckFormationEmpty_loop
+P:24E5:CheckFormationEmpty_skip
+P:24E9:CheckFormationEmptyRts
+P:24EA:CheckPause:Start edge while the ship is alive: pauseFlag = $10 + pause sound (unpause in PauseOrGameMode)
+P:2510:DiverIdle:state 0
+P:2511:UpdateDivers:RunDiverSlot for slots 7..0 (diverOam = slot * 16)
+P:2519:UpdateDivers_loop
+P:2528:DiverStateDispatch:jump by diverState,X (14 states, 7-10 repeat 2-5)
+P:254C:DiverLoop:state 6: turn one step every 4 frames until diverDir = $0C, then dive (state 7)
+P:2577:DiverLoop_skip
+P:2586:DiverLoop_skip2
+P:2595:DiverLoop_skip3
+P:2598:DiverReenterFlagship:flagship escape check on re-entry
+P:25B4:DiverReenterFlagship_loop
+P:25B5:DiverReenterFlagship_skip
+P:25BE:DiverReenter:states 3, 8 (left the screen): dive again when < 7 aliens are left,
+P:25D1:DiverDiveAgain:after a loop: dive again at the ship (diverTargetX = ship X)
+P:25E6:InitDiverSlot:no escorts, diverType = 0, sprite Y = 1
+P:25F9:DiverReturnToFormation:start flying back to the diver's formation slot
+P:2643:DiverRejoin:states 4, 9: drop in from the top back into the formation slot
+P:265E:DiverRejoin_skip
+P:2675:DiverRejoin_skip2
+P:268C:DiverExplode:state 11: 16 frames of explosion tiles; a flagship goes on to state 12
+P:26B8:DiverExplode_skip
+P:26C8:DiverShowScore:state 12: flagship bonus points sprite for $3C frames
+P:26DA:DiverShowScore_rts
+P:26DB:DiverShowScore_skip
+P:26EC:ScoreSpriteTiles:tile per flagship bonus (diverType): 150 200 300 300 800 150
+P:26F2:DiverRemove:states 5, 10, 13
+P:26FC:DiverDive:states 2, 7: dive at the player, fire, hit test with the ship; escorts follow the flagship
+P:2717:DiverDive_skip
+P:272E:DiverDive_skip2
+P:2745:DiverDive_skip3
+P:2755:DiverDive_skip4
+P:2778:DiverDive_loop
+P:2782:DiverDive_skip5
+P:2791:DiverDive_skip6
+P:2797:DiverDive_skip7
+P:27B8:DiverDive_loop2
+P:27B9:DiverDive_skip8
+P:27D6:DiverDive_skip9
+P:27E0:DiverDive_skip10
+P:27F6:DiverLoopIfFormationEmpty:formation empty (waveCleared): escorts/aliens at Y $90-$BF loop around (state 6)
+P:2831:DiverLoopIfFormationEmpty_skip
+P:2841:DiverLoopIfFormationEmpty_rts
+P:2842:DiverOffscreen:sprite left the screen: next state (3/8), hide the sprites
+P:2857:DiverOffscreen_skip
+P:285A:DiverOffscreen_skip2
+P:285D:HideDiverSprites:Y = 0 and blank tile for the 4 sprites of the current diver slot
+P:287B:HideDiverSpritesRts
+P:287C:RunDiverSlot:DiverStateDispatch + BuildDiverMetasprite
+P:287F:BuildDiverMetasprite:2x2 sprites, flipped by the attribute bits
+P:28C3:BuildDiverMetasprite_skip
+P:28C5:BuildDiverMetasprite_skip2
+P:28EA:MetaspriteNoFlip:tile order per flip combination
+P:2900:MetaspriteFlipH:4 diver sprites: tile order for a horizontally flipped frame
+P:2916:MetaspriteFlipV:4 diver sprites: tile order for a vertically flipped frame
+P:292C:MetaspriteFlipHV:4 diver sprites: tile order for a frame flipped both ways
+P:2942:MaybeFireBullet:FireEnemyBullet unless flagshipBonusTimer runs; keeps A, X, Y
+P:2952:MaybeFireBullet_skip
+P:2954:FireEnemyBullet:free bullet slot at OAM $0284+, motion toward the player
+P:2956:FireEnemyBullet_loop
+P:2962:FireEnemyBullet_skip
+P:2994:FireEnemyBullet_skip2
+P:29A9:FireEnemyBullet_skip3
+P:29AE:AimDiveAtPlayer:speed by row, 2 bullets (3 from stage 1), diverTargetX = X +/- clamp(|dx|/2, $30, $70)
+P:29E3:AimDiveAtPlayer_skip
+P:29EC:AimDiveAtPlayer_skip2
+P:29F2:AimDiveAtPlayer_skip3
+P:2A07:AimDiveAtPlayer_skip4
+P:2A19:AimDiveAtPlayerRts
+P:2A1A:DiveSpeedByRow:motionDiv of a diver, by formation row
+P:2A20:MovePlayer:Left/Right, playerX limited to -$6A..+$6A
+P:2A35:MovePlayerRts
+P:2A36:MovePlayerLeft:Left held: playerX - 1 down to -PLAYER_X_MAX
+P:2A44:MovePlayerLeft_rts
+P:2A45:FormationFlapTimer:redraw columns 9..0 one per frame, wait 12 frames, flapPhase + 1
+P:2A56:QueueColumnRedraw:A = column -> eventQueue
+P:2A64:QueueColumnRedrawRts
+P:2A65:ExplosionColumnLo:PPU low bytes ($23xx) of the ship explosion columns
+P:2A67:ExplosionColumnLo2:second column pair (the explosion is 4 tiles wide)
+P:2A69:UpdateBgTiles:player explosion tiles or one queued formation column
+P:2A8B:UpdateBgTiles_loop
+P:2AA9:UpdateBgTiles_skip
+P:2AB6:QueueBlank3Up:3 blank tile pairs up the column at $23(tmp0): clears the ship explosion
+P:2AB8:QueueBlank3Up_loop
+P:2ABE:QueueBlankUp:blank tile pair at $23(tmp0), tmp0 -= $20
+P:2ADD:QueueBlankUpRts
+P:2ADE:UpdateBgFormationColumn:dequeue an event and redraw one formation column
+P:2B07:UpdateBgFormationColumn_loop
+P:2B2E:AlienTilesByFlap:first tile per (flapPhase - column) & 3 and row parity
+P:2B36:QueueAlienOrBlank:carry = alien present: its tiles (QueueTileRows), else blank (two rows when tmp5 is odd)
+P:2B41:QueueBlankPair:blank tile pair at tmp1:tmp0, one row up
+P:2B5F:QueueTileRows:tiles tmp3 (and tmp3-1 when tmp5 is odd) going up
+P:2B6E:QueueTilePairUp:tiles tmp2, tmp2-2 at tmp1:tmp0, then one row up
+P:2B8C:QueueRowUp:one tile row up
+P:2B97:QueueTileRts
+P:2B98:UpdateStars:every 2nd frame: stars down 1 px, wrap at Y=$E4
+P:2BA1:UpdateStars_loop
+P:2BB7:UpdateStars_skip
+P:2BC4:UpdateStars_skip2
+P:2BCC:FlagshipAttackFromRight:flagship of column 6/5 + red escorts of the neighbour columns
+P:2BDA:FlagshipAttackFromRight_loop
+P:2BE9:FlagshipAttackFromLeft:flagship of column 3/4
+P:2BF7:FlagshipAttackFromLeft_loop
+P:2C06:FlagshipAttackRts
+P:2C07:LaunchFlagshipGroup:X = flagship column
+P:2C2C:LaunchFlagshipGroup_skip
+P:2C46:LaunchFlagshipGroup_skip2
+P:2C49:LaunchFlagshipGroup_skip3
+P:2C4F:LaunchFlagshipGroup_skip4
+P:2C65:LaunchFlagshipGroup_rts
+P:2C66:ReturnIfSlot0Busy:pops the caller when slot 0 (flagship slot) is in use
+P:2C6E:FindFreeDiverSlot:highest free slot (3-6) allowed by difficulty, else pops the caller
+P:2C7C:FindFreeDiverSlot_skip
+P:2C7F:FindFreeDiverSlot_loop
+P:2C8C:UseDiverSlot:X = free slot -> diverSlot, diverType = 0
+P:2C94:MaxDiverSlotStage1:last usable diver slot by difficulty, stage 0
+P:2C9C:MaxDiverSlot:last usable diver slot by difficulty, from stage 1
+P:2CA4:FindFreeEscortSlot:slots 2, 1, else pops the caller
+P:2CA6:FindFreeEscortSlot_loop
+P:2CB1:LaunchFromLeft:first alien from column 0: blue/purple, else red, else flagship
+P:2CBA:LaunchFromLeft_loop
+P:2CC1:LaunchFromLeft_loop2
+P:2CD0:AttackTypeMasks:formation bits checked per attack type: flagship, red, blue/purple
+P:2CD3:LaunchFromRight:same from column 9
+P:2CDC:LaunchFromRight_loop
+P:2CE3:LaunchFromRight_loop2
+P:2CF2:LaunchAlienByMask:A = column bits: launch the highest alien (row 5 down) whose bit is set
+P:2CF8:LaunchAlienByMask_loop
+P:2D08:LaunchAlienByMask_skip
+P:2D0E:LaunchFlagship:launch the flagship of column X
+P:2D17:LaunchEscort:diverType = 4, flagship diverType + 1
+P:2D27:LaunchDiver:X = column, Y = row, tmp6 = bit: take the alien out of the formation -> state 1
+P:2DAB:DiverPeelOff:state 1: loop out of the formation (MoveDiver), then dive
+P:2DBA:DiverPaletteByRow:sprite palette per formation row
+P:2DC0:FlagshipTileByRow:-> diverIsFlagship ($60 = flagship tile offset)
+P:2DC6:FormationBounce:reverse formationDir when the outermost occupied column reaches the edge
+P:2DCF:FormationBounce_loop
+P:2DDE:FormationBounce_skip
+P:2DEB:FormationBounce_loop2
+P:2DEC:FormationBounce_skip2
+P:2DF4:FormationBounce_loop3
+P:2E05:FormationBounce_skip3
+P:2E12:CheckShotHitsAlien:formation, then divers; a hit removes the shot
+P:2E28:CheckShotHitsAlienRts
+P:2E29:DecFlagshipBonusTimer:count down the time the flagship bonus stays on screen
+P:2E30:ShotHitsDivers:player shot in flight: test diver slots 6..0
+P:2E3F:ShotHitsDivers_loop
+P:2E4D:ShotHitsDiversRts
+P:2E4E:ShotHitsDiver:hit box test of the shot against the current diver slot; kill it on a hit
+P:2E7D:KillDiver:state 11 + score; a flagship: bonus (diverType+12), flagshipBonusTimer, escorts get its motion
+P:2EAB:CopyMotionToEscort:Y = escort slot (0 = none): copy the dx motion of slot X
+P:2EC5:CopyMotionToEscortRts
+P:2EC6:KillAlienDiver:non-flagship kill: sound and row score
+P:2ED3:ShotInColumnGap:shot between columns; shot Y < $A0 -> formationDx = 0
+P:2EDF:ShotInColumnGap_rts
+P:2EE0:ShotHitsFormation:clear the formation bit, explosion in slot 7, score
+P:2F07:ShotHitsFormation_loop
+P:2F6B:ShotHitsFormationRts
+P:2F6C:BitMask:1 << n
+P:2F74:AlienAttackLauncher:flagship attacks (flagshipAttackTimer = $4E) and single divers by attackTimers
+P:2F7B:AlienAttackLauncher_skip
+P:2F98:AlienAttackLauncher_skip2
+P:2F9E:AlienAttackLauncher_skip3
+P:2FBE:AlienAttackLauncher_skip4
+P:2FCD:AlienAttackLauncher_loop
+P:2FDC:AlienAttackLauncher_skip5
+P:2FF7:AlienAttackLauncher_skip6
+P:2FFA:AlienAttackLauncher_rts
+P:2FFB:FlagshipAttackTimer:every FlagshipPeriod*4 frames, if a flagship is in columns 3-6: flagshipAttackTimer = $96
+P:3009:FlagshipAttackTimer_skip
+P:300C:FlagshipAttackTimer_skip2
+P:301A:FlagshipAttackTimer_loop
+P:3026:FlagshipAttackTimer_skip3
+P:302A:FlagshipAttackTimer_rts
+P:302B:AttackTimerPeriods:periods of the 8 attackTimers (in 4-frame ticks)
+P:3033:DifficultyAttackMask:attackTimers that may launch a diver, by difficulty
+P:303B:FlagshipPeriodStage1:by difficulty, stage 0 (0 = no flagship attack)
+P:3043:FlagshipPeriod:by difficulty, from stage 1
+P:304B:CountAliens:one formation column per frame (frameTick & 15 = 0-9), total -> alienCount at 10
+P:305D:CountAliens_rts
+P:305E:CountAliens_skip
+P:3067:CountAliens_loop
+P:306C:CountAliens_skip2
+P:3077:SoundReturnIfNotInGame:outside gameMode 3: silence SQ1 and pop the caller
+P:3088:SoundReturnIfNotInGame_rts
+P:3089:UpdateSound:effects, 4 tunes on SQ1 (lowest number wins), dive siren
+P:3099:UpdateSound_loop
+P:30A7:UpdateSound_loop2
+P:30B2:UpdateSound_loop3
+P:30C0:UpdateSound_skip
+P:30D3:UpdateSound_skip2
+P:30D7:UpdateSound_skip3
+P:30DB:UpdateSound_skip4
+P:30DD:UpdateSound_skip5
+P:30F6:UpdateSound_skip6
+P:3108:UpdateSoundRts
+P:3109:InitMusicPtr:songTable[0] = SongData + $0840 (the operands of $F145/$F14C)
+P:311D:MusicStartTune:start a requested tune
+P:3130:MusicChannelUpdate:X = tune 0-3: next note -> sq1PeriodLo/Hi
+P:3145:SongBiasLo:operand (SongBiasLo+1) is read by InitMusicPtr
+P:314C:SongBiasHi:operand (SongBiasHi+1) is read by InitMusicPtr
+P:316E:SongBiasHi_skip
+P:3184:SongBiasHi_rts
+P:3185:NotePeriod:SQ1 period (lo, hi) per note 0-$1F; 0 = rest
+P:31C5:NoteDuration:frames per note: index = note byte bits 7-5; 0 (byte $FF) ends the song
+P:31CD:SongPtr:-> SongData (InitMusicPtr turns it into a songTable entry)
+P:31CF:SongData:song 0 (extra life): note byte = duration index << 5 | note
+P:31DF:PlayPlayerExplosionSound:noise + SQ2 sweep, explosionSound = 6
+P:3209:UpdateExplosionSound:every 8 frames noise period + 1 until $0E
+P:3222:SoundEffectRts
+P:3223:PlayShotSound:SQ2 sweep + noise, shotSound = 1
+P:324F:UpdateShotSound:TCRF bug: falls through into the clear, so the noise changes only once
+P:3261:UpdateShotSound_skip
+P:3266:UpdateAmbientHum:every 32 frames SQ2 hum, unless the wave is cleared or the start tune plays
+P:3288:UpdateAmbientHumRts
+P:3289:MusicPlayer:reads one note byte per call through PPUDATA: low nibble = SQ1 note, high = SQ2
+P:32D2:MusicPlayer_skip
+P:32D6:MusicPlayer_loop
+P:32D7:MusicPlayer_skip2
+P:3323:MusicPlayer_loop2
+P:332C:MusicSq2Period:16 note periods, big-endian (hi, lo); index = high nibble * 2
+P:334C:MusicSq1Period:16 note periods, big-endian (hi, lo); index = low nibble * 2
+P:336C:JumpTableDispatch:A = index; pops the return address and jumps through the .word table after the JSR
+P:3381:UpdateMotionSteps:once per frame: CalcMotionStep for the 24 motion objects
+P:338B:UpdateMotionSteps_loop
+P:3391:UpdateMotionStepsRts
+P:3392:CalcMotionStep:motionStep = (motionNum + motionRem) / motionDiv, signed by motionDir
+P:33A3:CalcMotionStep_loop
+P:33A9:CalcMotionStep_skip
+P:33AA:CalcMotionStep_loop2
+P:33C6:CalcMotionStep_skip2
+P:33CB:WriteVramRow:NMI: 26 bytes from (vramRowPtr) to the PPU at textVram, then the blank row at $2003
+P:33E3:WriteVramRow_loop
+P:3410:WriteVramRow_loop2
+P:3436:WriteVramRow_skip
+P:3438:WriteVramRow_loop3
+P:343E:WriteVramRow_skip2
+P:3458:WriteVramRow_skip3
+P:346E:ReadControllers:also counts microphone toggles -> music player (second trigger method)
+P:3482:ReadControllers_loop
+P:34C0:ReadControllers_rts
+P:34C1:FireButtonMask:bit masks for CheckFireButton
+P:34C9:CheckFireButton:pops the caller unless A/B was just pressed (autoFireTimer,X counts 3 -> 0)
+P:34D4:CheckFireButton_skip
+P:34DA:CheckFireButton_rts
+P:34DB:UpdateEnemyBullets:7 bullets at OAM $0284 (motion objects 0-6); a hit sets playerState = 1
+P:34E6:UpdateEnemyBullets_loop
+P:34FB:UpdateEnemyBullets_skip
+P:351E:UpdateEnemyBullets_skip2
+P:3528:UpdateEnemyBullets_skip3
+P:353E:UpdateEnemyBullets_skip4
+P:3548:UpdatePlayerShot:shot sprite at OAM $0280, 4 px per frame; Y = $C8 = ready above the ship
+P:3551:UpdatePlayerShot_loop
+P:355C:UpdatePlayerShot_skip
+P:3561:UpdatePlayerShot_skip2
+P:356A:UpdatePlayerShot_rts
+P:356B:UpdatePlayerShot_skip3
+P:357E:UpdatePlayerShotRts
+P:357F:FaceDiverToPlayer:diving: tile and flip point at the ship (DirectionFromDelta)
+P:35A8:FaceDiverToPlayer_skip
+P:35AF:SetDiverFlipAndTile:flip bits from the quadrant (tmp3), diverTile = $44 + flagship offset + frame*4
+P:35D0:FlipByQuadrant:OAM flip bits per direction quadrant
+P:35D4:DirectionFromDelta:tmp6 = direction 0-6 from |dx| (tmp5) / |dy| (tmp4)
+P:35FE:DirectionFromDelta_skip
+P:3617:DirectionFromDelta_skip2
+P:361A:Divide8:tmp6 = tmp5 * 128 / tmp4 (bit 7 = integer part, tmp5 <= tmp4)
+P:3623:Divide8_loop
+P:362A:Divide8_skip
+P:362D:Divide8_skip2
+P:3633:MoveDiver:move by the dx/dy motion; turn diverDir toward $30 (loop), the Dir* tables give the motion
+P:3646:MoveDiver_skip
+P:364B:MoveDiver_skip2
+P:3650:MoveDiverStep:A = direction: move the diver by motionStep, then set its dx/dy speed from the Dir* tables
+P:3680:SetDiverFrameFromDir:Y = direction: sprite frame and flips of the diver
+P:369A:DirFrame:per direction (diverDir / 4, 25 entries): tile frame, quadrant, dx and dy speed/sign
+P:36B3:DirQuadrant:flip quadrant (FlipByQuadrant index) per direction
+P:36CC:DirDxNum:horizontal speed per direction (motionNum, /100 px per frame)
+P:36E5:DirDxSign:horizontal sign per direction (motionDir: $80 = negative)
+P:36FE:DirDyNum:vertical speed per direction
+P:3717:DirDySign:vertical sign per direction ($80 = negative)
+P:3730:ScoreHundreds:points = ScoreHundreds,X * 100 + ScoreTens,X * 10. X = row (formation: 30,30,30,40,50,60),
+P:3742:ScoreTens:see ScoreHundreds
+P:3754:AddScore:A = score index; BCD add to the current player's score; extra life at 5000 (once)
+P:3768:AddScoreSkipP2:player 1: BIT abs swallows the LDY of player 2
+P:3769:AddScoreP2:player 2 enters here
+P:376E:AddScoreP2_loop
+P:377B:AddScoreP2_skip
+P:3784:AddScoreP2_loop2
+P:3792:AddScoreP2_skip2
+P:37AD:AddScoreP2_rts
+P:37AE:ReturnIfNotInGame:pops the caller's return address unless gameMode = 3
+P:37B8:DrawLives:up to 3 ship icons in the HUD
+P:37BD:DrawLives_loop
+P:37C5:DrawLives_skip
+P:37D2:DrawLivesRts
+P:37D3:DrawStageFlags:stage < 5: stage+1 flag icons; else 1 flag + DrawStageNumber
+P:37EA:DrawStageFlagIcons:5 flag icons (tile $6C) for tmp6 flags, else blank
+P:37EC:DrawStageFlagIcons_loop
+P:37F4:DrawStageFlagIcons_skip
+P:3802:DrawStageNumber:stage + 1 as two decimal digits (stage >= 5 only, not seen in play tests)
+P:3809:DrawStageNumber_loop
+P:3817:IntroTextSequence:intro text rows by subStep (textNtFlag counts the rows)
+P:3826:IntroText0:steps of IntroTextSequence (by subStep)
+P:3833:IntroText1:print the 6 logo rows (bottom up), then the border; menu texts next
+P:3842:IntroText1_skip
+P:3857:IntroText2:print the 4 title menu texts (1 PLAYER .. ALL RIGHTS RESERVED)
+P:3867:IntroText2_rts
+P:3868:IntroText3:print 1UP, HI-SCORE and 2UP
+P:387E:IntroTextDone:next gameSubMode (IntroToTitle)
+P:3885:CheckStartInAttract:Start/Select during the title or the demo -> title menu (gameMode 1, gameSubMode 2)
+P:38BA:CheckStartInAttract_rts
+P:38BB:TitleMode:gameMode 1: title scroll, menu, story and score table pages (by gameSubMode)
+P:38DA:TitleInit:scrollY = 0, start the title scroll
+P:38E7:TitleScroll:title scrolls in (scrollY + 1 per frame for $EF frames), menu cursor sprites
+P:38F0:TitleScroll_skip
+P:38F2:TitleScrollDone:scroll finished (or skipped): title in place
+P:38FC:TitleDrawCursor:menu cursor and title marks as sprites; pattern tables swapped once the logo is shown
+P:3910:TitleDrawCursor_skip
+P:3940:TitleDrawCursor_skip2
+P:3959:TitleDrawCursor_skip3
+P:395D:TitleShowMenuScreen:switch the nametable/pattern bits, scrollY = $FF, clear sprites
+P:396B:ClearSprites:OAM $0200-$029F = 0
+P:396E:ClearSprites_loop
+P:3977:TitleMenu:Select (held 3 frames) = 1P/2P, Start = begin; timeout (modeTimer) -> story
+P:3983:TitleMenu_skip
+P:398D:TitleMenu_skip2
+P:399F:TitleMenu_skip3
+P:39AD:StartGameFromMenu:gameMode = 3, start tune (musRequest+3), playerState = $21
+P:39CE:TitleStoryInit:wipeRowSet = 0, print text $16
+P:39E3:TitleStoryText:every $30 frames one story line (texts 3-6), then a flagship sprite
+P:3A00:TitleStoryText_skip
+P:3A28:TitleStoryText_rts
+P:3A29:PrintScoreTableHeader:text $1B + blinking text $17-$1A
+P:3A3D:ScoreAdvanceTable:every $30 frames one alien type + its points (texts $1C-$1E)
+P:3A7E:ScoreAdvanceTable_rts
+P:3A7F:ScoreAdvanceTable_skip
+P:3A88:ScoreAdvanceWait:header blinks until modeTimer runs out
+P:3A91:ScoreAdvanceWait_rts
+P:3A92:NextGameMode:gameMode + 1, sub mode and step 0
+P:3A9B:WipeIfPlayerSwitched:2P: wipe the screen only after a player change, else skip the wipe
+P:3AA4:WipeIfPlayerSwitched_skip
+P:3AA8:StartScreenWipe:wipeTimer = $20, scrollY = $FF
+P:3AB6:StartScreenWipe_skip
+P:3AC3:ScreenWipe:column wipeTimer (31..1): sprites in that column and 16 text rows (WipeRows*) cleared
+P:3AD1:ScreenWipe_skip
+P:3AD3:ScreenWipe_loop
+P:3AE9:ScreenWipe_skip2
+P:3AEC:ScreenWipe_loop2
+P:3B02:ScreenWipe_skip3
+P:3B22:ScreenWipe_rts
+P:3B23:WipeRowsTitle:text rows cleared by ScreenWipe (wipeRowSet = 0)
+P:3B33:WipeRowsGame:wipeRowSet = 1
+P:3B43:ClearTextRowAndPrint:textBuf = 26 blanks ($10), then PrintText
+P:3B48:ClearTextRowAndPrint_loop
+P:3B4F:PrintText:A = text number. Record: row/column byte, start index in textBuf, chars - textCharBias up to "*" ($2A).
+P:3B8A:PrintText_skip
+P:3B91:PrintText_loop
+P:3BA4:PrintText_rts
+P:3BA5:CopyrightText:unused copyright string
+P:3BB5:ResetSignature:"HARUHISA UDAGAWA" kept in RAM $0105-$0114 to tell a warm reset from power-on
+P:3BC5:RESET:also the IRQ vector
+P:3BCF:RESET_loop
+P:3BD7:RESET_loop2
+P:3BE7:RESET_loop3
+P:3BFA:RESET_skip
+P:3BFD:RESET_loop4
+P:3C06:RESET_skip2
+P:3C08:RESET_loop5
+P:3C17:RESET_loop6
+P:3C68:RESET_loop7
+P:3C78:RESET_loop8
+P:3C9C:RESET_loop9
+P:3CAD:RESET_loop10
+P:3CC9:RESET_loop11
+P:3CD5:RESET_loop12
+P:3CE8:RESET_skip3
+P:3CF2:RESET_loop13
+P:3CFC:RESET_loop14
+P:3D05:RESET_skip4
+P:3D1C:RESET_loop15
+P:3D30:RESET_loop16
+P:3D37:RESET_skip5
+P:3D3C:ColdBootInit:first power-on: scoreArea = blank, hiScore = 5000, then ResetBothScores
+P:3D40:ColdBootInit_loop
+P:3D59:Palette:32 bytes -> PPU $3F00 at RESET
+P:3D79:AttrRuns:attribute table runs (count, value), 0 ends; X=0 -> $23C8, X=$0F -> $2BC8
+P:3D95:BlankRowPtr:-> BlankRow (26 x $10)
+P:3D97:BlankRow:26 blank tiles ($10): PPU row source for ClearTextRow
+P:3DB1:NMI:watchdog first: interrupted PC outside ROM, B/D flag set, stack < $30, NMI re-entered
+P:3DD4:NmiWatchdogReset:A+B on controller 2: warm reset (keeps the signature), else cold reset
+P:3DDF:ResetKeepSignature:write the signature back to $0105 and restart through the RESET vector.
+P:3DE6:ResetKeepSignature_loop
+P:3DF2:ResetCold:destroy the signature and restart through the RESET vector
+P:3DFA:NmiMain:nmiBusy++; MusicPlayer instead of the game when musicPlayerFlag is set
+P:3E1C:NmiRender:OAM DMA, text row, timed scroll split, VRAM queue, game frame
+P:3E2D:NmiRender_loop
+P:3E39:NmiRender_skip
+P:3E47:NmiRender_skip2
+P:3E4F:NmiRender_loop2
+P:3E63:NmiRender_skip3
+P:3E73:NmiRender_skip4
+P:3E7C:NmiFrameEnd:end of NMI: frameCounter, HUD score queue, random table mix, restore registers
+P:3E89:NmiFrameEnd_skip
+P:3EA3:UpdateHudScores:intro/game: copy scores to the HUD buffer, update hiScore, queue HUD tile pairs
+P:3EAC:UpdateHudScores_skip
+P:3EAE:UpdateHudScores_loop
+P:3EBD:UpdateHudScores_loop2
+P:3EC6:UpdateHudScores_skip2
+P:3EC9:UpdateHudScores_loop3
+P:3EDE:UpdateHudScores_loop4
+P:3EE7:UpdateHudScores_loop5
+P:3EFB:UpdateHudScores_skip3
+P:3F17:UpdateHudScores_rts
+P:3F18:PauseOrGameMode:from NMI: paused -> SQ1 off, blinking text $15 above the ship, Start resumes;
+P:3F31:PauseOrGameMode_skip
+P:3F37:PauseOrGameMode_skip2
+P:3F57:PauseOrGameMode_skip3
+P:3F5E:PauseOrGameMode_skip4
+P:3F63:PauseOrGameMode_rts
+P:3F64:GameModeDispatch:frame handler: jump by gameMode ($FF)
+P:3F6B:GameModeTable:by gameMode (see the MODE_* constants)
+P:3F79:PlayModeIndex:= 3 (gameMode of the real game), compared with gameMode everywhere
+P:3F7A:TitleModeIndex:= 1
+P:3F7B:GameOverModeIndex:= 5, used when the demo ends
+P:3F7C:UnusedGameMode6:sets gameMode = 0
+P:3F81:GameOverFlyIn:mode 4: noise, the GAME OVER letters fly in while lives ($3C) counts down -> mode 5
+P:3FA5:GameOverFlyIn_skip
+P:3FA9:GameOverFlyIn_loop
+P:3FC7:GameOverMode:mode 5: GAME OVER shown (lives counts up as a 256-frame timer), wipe, back to the title.
+P:3FD4:ReturnToTitle:gameMode = title, sub mode 0
+P:3FDF:GameOverWait:game over screen: the game keeps running; lives (0 after game over) counts 256 frames
+P:3FEF:GameOverWait_rts
+P:3FF0:UnusedPadding:free space before the vectors
+P:3FFA:NmiVector
+P:3FFC:ResetVector:JMP (ResetVector) restarts the game
+P:3FFE:IrqVector
+R:0:mpVramLo:music player: PPU address low byte of the next note
+R:1:mpNote:music player: current note byte (lo nibble SQ1, hi nibble SQ2)
+R:2:mpVramHi:music player: PPU address high byte of the song
+R:3:mpStarted:music player: nonzero after the APU was initialised
+R:4:mpTempoMask:music player: a note is read when (frameCounter & mask) == 0
+R:23:micPrev:previous $4016 value (bit 2 = Famicom microphone)
+R:24:micShoutCount:microphone toggles; 4 + resetCounter 10 -> music player
+R:27:alienCount:aliens left in the formation (CountAliens, one column per frame)
+R:28:alienCountTmp:CountAliens accumulator
+R:29:playerSwitched:set by SwapPlayers; WipeIfPlayerSwitched wipes the screen once
+R:2A:nmiBusy:set during NMI; an NMI that finds it set resets the game (watchdog)
+R:2B:gameOverTimer:2P: $78 frames of "GAME OVER PLAYER n" before the other player continues
+R:2C:deathDelay:DeathStep2: $3C frames after the "PLAYER n" text
+R:2D:hudRedrawIndex:UpdateHudScores: next HUD tile pair to queue (0-$15)
+R:2E:wipeRowSet:ScreenWipe: 0 = WipeRowsTitle (story), 1 = WipeRowsGame (InitNewGame)
+R:2F:titleScrollTimer:title scroll-in: $EF frames
+R:30:menuHoldTimer:title menu: Start/Select must be held 3 frames
+R:31:menuSelect:title menu: bit 0 = 1P / 2P
+R:32:unused32:only written (0) by TitleInit
+R:33:wipeTimer:ScreenWipe column 31..1
+R:34:sq1HiLast:last value written to SQ1_HI (rewrite only on change)
+R:35:flagshipAttackTimer:set to $96 by FlagshipAttackTimer, counts down per frame; the attack starts at $4E
+R:36:textVram:PrintText: PPU address of the text row
+R:38:vramRowPtr:WriteVramRow: source of the 26 bytes
+R:3A:rngSeed:incremented while waiting for vblank; added into randomTable every NMI
+R:3B:rngSeed2:incremented when rngSeed wraps; never read
+R:3C:twoPlayerGame:nonzero in a 2-player game until one player is out
+R:3D:extraLifePending:nonzero until the 5000-point extra life is given (per player)
+R:3E:otherExtraLifePending:same for the waiting player
+R:3F:flagshipBonusTimer:$B4 after a flagship is shot; no enemy fire meanwhile
+R:40:shotSound:player shot sound step (UpdateShotSound clears it after one step - TCRF bug)
+R:41:explosionSound:player explosion: noise period 6..$0D, 0 = off
+R:42:lives:GameHacking.org: lives
+R:43:otherLives:lives of the player who is waiting (2P game)
+R:44:autoFireTimer:GameHacking.org "auto-fire" 0044:01; CheckFireButton fires when it counts down to 0
+R:4C:curJoy:buttons of the current player (synthesized by the demo AI in attract mode)
+R:4E:pauseFlag:nonzero = game paused (Start)
+R:4F:playerState:GameHacking.org "invincible": 004F:00; 0 = ship in play, 1-$21 explosion, $21 = waiting to spawn
+R:50:explTileLo:UpdateBgTiles: player explosion tile address
+R:51:explRow:UpdateBgTiles: player explosion row 3..0
+R:53:curPlayer:bit 0 = which player is playing (2P game)
+R:54:scoreAdd:digits to add (scoreAdd+3 = hundreds, +4 = tens), see AddScore
+R:59:stage:GameHacking.org: stage modifier
+R:5A:otherStage:stage of the player who is waiting (2P game)
+R:5B:attackTimers:8 counters (every 4 frames), each wraps at AttackTimerPeriods,X; DifficultyAttackMask picks which launch
+R:63:secondTimer:frames 0-59
+R:64:difficultyTimer:seconds 0-19: difficulty + 1 every 20 seconds (max 7)
+R:65:difficulty:min(stage, 7) at the start of a wave, then grows with time
+R:66:attackSide:bit 0: LaunchFromLeft / LaunchFromRight
+R:67:flagshipAttackCount:4-frame ticks up to FlagshipPeriod
+R:68:diveSiren:$32 when a diver launches: siren while aliens dive
+R:6B:songPtr:MusicChannelUpdate: song data pointer (songTable,X*2 - $0840)
+R:6D:musRequest:per tune (0-3): start it; 0 extra life, 1 flagship hit, 2 alien hit, 3 game start.
+R:71:musChannel:tune being updated (3..0)
+R:72:musPos:per tune: position in the song
+R:76:musTimer:per tune: note duration counter; musTimer+3 (start tune) != 0 blocks the hum and SpawnPlayer
+R:7E:sndScratch:$7E-$8D cleared every frame by UpdateSound; $7E = 1 when a note starts
+R:80:sq1PeriodLo:SQ1 period written by MusicChannelUpdate
+R:81:sq1PeriodHi
+R:8E:flagshipRespawn:nonzero: a lone flagship escaped, it comes back in column 4/5 next wave (current player)
+R:90:otherFlagshipRespawn:same for the waiting player (swapped by SwapPlayers)
+R:92:columnDivers:number of diving aliens per formation column (keeps the column for FormationBounce)
+R:9C:modeTimer:general timer: title menu, story text, delay after a wave
+R:9D:diverOam:current diver slot * 16 (OAM offset)
+R:9E:diverSlot:current diver slot (0-7)
+R:9F:waveCleared:set by CheckFormationEmpty when all 10 columns are empty
+R:A0:eventQueue:ring buffer of formation columns to redraw
+R:C0:eventHead:write index (QueueColumnRedraw)
+R:C1:eventTail:read index (UpdateBgTiles)
+R:C2:flapTimer:FormationFlapTimer: 9..0 = column to redraw, then down to -12
+R:C3:formation:column bitmasks (column 0 = left): bits 0-2 blue rows, 3 purple, 4 red, 5 flagship
+R:CD:formationOther:formation of the player who is waiting (2P game)
+R:D7:redrawColumn:column being redrawn by UpdateBgTiles
+R:D8:flapPhase:formation wing animation phase (+1 after each full redraw)
+R:DA:tmp0:$DA-$E0: temporaries shared by many routines
+R:DB:tmp1
+R:DC:tmp2
+R:DD:tmp3:also the direction quadrant of a diver
+R:DE:tmp4:also Divide8 divisor, demo fire flag
+R:DF:tmp5:also Divide8 dividend
+R:E0:tmp6:also Divide8 result
+R:E1:vramQueueCount:entries in the vramQueue* arrays (max 16), flushed in NMI
+R:E2:srcPtr:PrintText: source of the text; RESET: destination of the CHR copies
+R:E4:playerX:signed -$6A..+$6A, 0 = centre (ship X = playerX + $78); also the bottom scroll
+R:E5:formationX:formation horizontal position (column X = col*16 + $30 + formationX)
+R:E8:jumpTablePtr:JumpTableDispatch: return address of the JSR (= table - 1)
+R:EA:jumpTarget:JumpTableDispatch: jump target
+R:EC:motionTick:UpdateMotionSteps runs once per frameTick
+R:ED:frameTick:incremented once per GameModeDispatch
+R:EE:joy1Prev
+R:EF:joy1:controller 1, bit 7 = A ... bit 0 = Right
+R:F0:joy2Prev
+R:F1:joy2:controller 2 (A+B = $C0 enables the music player)
+R:F2:diverDirTmp:MoveDiver: direction index (diverDir / 4)
+R:F6:scrollX
+R:F7:scrollY
+R:FA:ppuMaskShadow
+R:FB:ppuCtrlShadow
+R:FD:subStep:step inside a gameSubMode handler (death sequence, story text ...)
+R:FE:gameSubMode:index for the per-mode jump tables
+R:FF:gameMode:index into GameModeTable
+R:100:stackPage:stack page base, STA stackPage,X
+R:101:musicPlayerFlag:nonzero -> NMI runs MusicPlayer every frame. In REVA nothing sets it: ResetKeepSignature
+R:102:frameCounter:24-bit, big-endian: $0102 high ... $0104 low
+R:105:resetSignature:copy of "HARUHISA UDAGAWA" (TCRF)
+R:115:resetCounter:TCRF: number of warm resets; $2D (45) / $0A (10) enable the music player
+R:116:scoreArea:$0116-$012F, set to $10 (blank) at power-on; AddScore uses scoreArea,Y
+R:117:scoreP1:BCD digits, tile $10 = blank
+R:120:hiScore:5000 after power-on
+R:129:scoreP2
+R:14E:songTable:tune pointers as PPU addresses (RAM + SONG_PTR_BIAS); [0] set by InitMusicPtr
+R:156:TuneGameStart:tune 3
+R:1AB:TuneAlienHit:tune 2
+R:1CD:TuneFlagshipHit:tune 1
+R:200:oamBuffer:sprite page for OAM DMA ($4014 = $02)
+R:300:chrData:RAM copy of PPU $1480-$17FF: text pointers and records (src/chr.asm)
+R:301:textPtrs:PrintText: 2-byte pointers to the texts, as PPU addresses
+R:380:TxtBorder:text record
+R:396:TxtLogo0:text record
+R:3AC:TxtLogo1:text record
+R:3C2:TxtLogo2:text record
+R:3D8:TxtLogo3:text record
+R:3EE:TxtLogo4:text record
+R:404:TxtLogo5:text record
+R:410:TxtLogoNamcot:text record
+R:41C:Txt1Up:text record
+R:422:TxtHiscore:text record
+R:42D:Txt2Up:text record
+R:433:TxtMission:text record
+R:44D:TxtWeAreTheGalaxians:text record
+R:464:TxtScoreTable:text record
+R:480:chrTiles:tiles $60-$6F (graphics) in the copied block
+R:580:TxtConvoyCharger:text record
+R:592:Txt1Player:text record
+R:59D:Txt2Players:text record
+R:5A9:TxtC19791984NamcoLtd:text record
+R:5C1:TxtRights:text record
+R:5D7:TxtPlayer1:text record
+R:5E2:TxtPlayer2:text record
+R:5ED:TxtGameOver:text record
+R:5FA:TxtReady:text record
+R:600:ramPage6:RESET clears $0600-$06FF (the text copy then overwrites $0600-$067F)
+R:602:TxtPause:text record
+R:60A:TxtBonus150:text record
+R:610:TxtBonus200:text record
+R:616:TxtBonus300:text record
+R:61C:TxtBonus800:text record
+R:622:TxtScoreRow0:text record
+R:635:TxtScoreRow1:text record
+R:648:TxtScoreRow2:text record
+R:65B:TxtScoreRow3:text record
+R:66E:Txt2UpLeft:text record
+R:674:TxtBlankRow20:text record
+R:677:TxtBlankRow18:text record
+R:68F:demoTargetX:demo AI: X the ship walks to
+R:690:hudBuffer:HUD tiles for PPU $2074-$209F (two rows): 22 pairs queued one per frame by UpdateHudScores
+R:6A0:hudScore:score of the current player shown in the HUD (hudScore+9 = hiScore copy)
+R:6B1:hudLives:ship icons, lower half (tile $6F; upper half $6E at hudBuffer+1)
+R:6B5:hudFlags:stage flag icons (lower half; upper half at hudBuffer+5)
+R:6B6:hudStageTens:stage number (stage >= 5) next to one flag; overlaps hudFlags+1
+R:6B7:hudStageOnes
+R:6BC:textBuf:one text row: PrintText fills it, WriteVramRow (NMI) copies it to textVram
+R:6D6:textCharBias:subtracted from the characters by PrintText ($30 or 0)
+R:6D7:textNtFlag:PrintText: nonzero = second nametable ($28xx); also a step counter of IntroTextSequence
+R:6D8:randomTable:randomTable,X += rngSeed every NMI (X = frameTick & 15)
+R:6E8:diverShots:bullets the diver may still fire (2, 3 from stage 1)
+R:6F0:diverType:score index: formation row 0-5; escort 4; flagship 0 + 1 per escort launched or lost (bonus index)
+R:6F8:diverEscort2:flagship: slot of the second escort
+R:6FF:flagshipDir:-1 / +1: side of the flagship attack (= diverEscort2+7)
+R:700:diverEscort1:flagship: slot of the first escort
+R:707:flagshipColumn:column of the attacking flagship (= diverEscort1+7)
+R:708:diverIsFlagship:$60 for a flagship (also its tile offset), else 0
+R:710:diverDropY:state 4/9: frames left while dropping back into the formation
+R:718:diverRow:formation row 0-5
+R:720:diverColumn:formation column 0-9
+R:728:diverTile:first tile of the 2x2 metasprite
+R:730:diverDir:direction 0-$5F (diverDir / 4 indexes the Dir* tables); a frame counter in states 11-12
+R:738:diverState:per diver slot: state for DiverStateDispatch
+R:740:diverTargetX:X where the dive turns back toward the ship
+R:748:vramQueueTile2:NMI queue: second tile
+R:758:vramQueueTile1:NMI queue: first tile
+R:768:vramQueueLo:NMI queue: PPU address low
+R:778:vramQueueHi:NMI queue: PPU address high
+R:788:motionDir:bit 7 = negative; GameHacking.org "enemy shooting affected" 078D:00 = motionDir+5
+R:79F:formationDir:bit 7 = moving left (= motionDir+23), flipped by FormationBounce
+R:7A0:motionDiv:divisor: speed = motionNum / motionDiv px per frame; 0 = object idle
+R:7B8:motionNum:numerator, added to motionRem every frame
+R:7D0:motionRem:remainder of the division (sub-pixel position)
+R:7E8:motionStep:signed pixels per frame, computed by UpdateMotionSteps
+R:7FF:formationDx:formation drift per frame (= motionStep+23)

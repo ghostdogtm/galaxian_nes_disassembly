@@ -1,0 +1,13 @@
+# ROM dumps are copyrighted: never commit them. The CDL file (tools input) stays tracked.
+*.nes
+
+# build output (assemble.bat / make)
+*.o
+galaxian.map
+galaxian_labels.txt
+
+# installed Mesen 2
+/mesen/
+
+# scratch
+/tmp/

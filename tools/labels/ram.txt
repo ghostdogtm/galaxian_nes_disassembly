@@ -1,0 +1,162 @@
+; ADDR  NAME  [SIZE]  ; comment            (hex addresses; SIZE>1 makes ADDR+n print as NAME+n)
+; Sources: TCRF, GameHacking.org RAM codes, code analysis. Entries marked (?) are guesses from code - verify.
+
+; ---- zero page
+0000 mpVramLo                   ; music player: PPU address low byte of the next note
+0001 mpNote                    ; music player: current note byte (lo nibble SQ1, hi nibble SQ2)
+0002 mpVramHi                   ; music player: PPU address high byte of the song
+0003 mpStarted                  ; music player: nonzero after the APU was initialised
+0004 mpTempoMask                ; music player: a note is read when (frameCounter & mask) == 0
+0023 micPrev                    ; previous $4016 value (bit 2 = Famicom microphone)
+0024 micShoutCount              ; microphone toggles; 4 + resetCounter 10 -> music player
+0027 alienCount                 ; aliens left in the formation (CountAliens, one column per frame)
+0028 alienCountTmp              ; CountAliens accumulator
+0029 playerSwitched             ; set by SwapPlayers; WipeIfPlayerSwitched wipes the screen once
+002A nmiBusy                    ; set during NMI; an NMI that finds it set resets the game (watchdog)
+002B gameOverTimer              ; 2P: $78 frames of "GAME OVER PLAYER n" before the other player continues
+002C deathDelay                 ; DeathStep2: $3C frames after the "PLAYER n" text
+002D hudRedrawIndex             ; UpdateHudScores: next HUD tile pair to queue (0-$15)
+002E wipeRowSet                 ; ScreenWipe: 0 = WipeRowsTitle (story), 1 = WipeRowsGame (InitNewGame)
+002F titleScrollTimer           ; title scroll-in: $EF frames
+0030 menuHoldTimer              ; title menu: Start/Select must be held 3 frames
+0031 menuSelect                 ; title menu: bit 0 = 1P / 2P
+0032 unused32                   ; only written (0) by TitleInit
+0033 wipeTimer                  ; ScreenWipe column 31..1
+0034 sq1HiLast                  ; last value written to SQ1_HI (rewrite only on change)
+0035 flagshipAttackTimer        ; set to $96 by FlagshipAttackTimer, counts down per frame; the attack starts at $4E
+0036 textVram 2                 ; PrintText: PPU address of the text row
+0038 vramRowPtr 2               ; WriteVramRow: source of the 26 bytes
+003A rngSeed                   ; incremented while waiting for vblank; added into randomTable every NMI
+003B rngSeed2                   ; incremented when rngSeed wraps; never read
+003C twoPlayerGame              ; nonzero in a 2-player game until one player is out
+003D extraLifePending           ; nonzero until the 5000-point extra life is given (per player)
+003E otherExtraLifePending      ; same for the waiting player
+003F flagshipBonusTimer         ; $B4 after a flagship is shot; no enemy fire meanwhile
+0040 shotSound                  ; player shot sound step (UpdateShotSound clears it after one step - TCRF bug)
+0041 explosionSound             ; player explosion: noise period 6..$0D, 0 = off
+0042 lives                      ; GameHacking.org: lives
+0043 otherLives                 ; lives of the player who is waiting (2P game)
+0044 autoFireTimer              ; GameHacking.org "auto-fire" 0044:01; CheckFireButton fires when it counts down to 0
+004C curJoy                     ; buttons of the current player (synthesized by the demo AI in attract mode)
+004E pauseFlag                  ; nonzero = game paused (Start)
+004F playerState                ; GameHacking.org "invincible": 004F:00; 0 = ship in play, 1-$21 explosion, $21 = waiting to spawn
+0050 explTileLo                 ; UpdateBgTiles: player explosion tile address
+0051 explRow                    ; UpdateBgTiles: player explosion row 3..0
+0053 curPlayer                 ; bit 0 = which player is playing (2P game)
+0054 scoreAdd 5                 ; digits to add (scoreAdd+3 = hundreds, +4 = tens), see AddScore
+0059 stage                      ; GameHacking.org: stage modifier
+005A otherStage                 ; stage of the player who is waiting (2P game)
+005B attackTimers 8             ; 8 counters (every 4 frames), each wraps at AttackTimerPeriods,X; DifficultyAttackMask picks which launch
+0063 secondTimer                ; frames 0-59
+0064 difficultyTimer            ; seconds 0-19: difficulty + 1 every 20 seconds (max 7)
+0065 difficulty                 ; min(stage, 7) at the start of a wave, then grows with time
+0066 attackSide                 ; bit 0: LaunchFromLeft / LaunchFromRight
+0067 flagshipAttackCount        ; 4-frame ticks up to FlagshipPeriod
+0068 diveSiren                  ; $32 when a diver launches: siren while aliens dive
+006B songPtr 2                  ; MusicChannelUpdate: song data pointer (songTable,X*2 - $0840)
+006D musRequest 4               ; per tune (0-3): start it; 0 extra life, 1 flagship hit, 2 alien hit, 3 game start.
+                                ; all 4 tunes play on SQ1, the lowest tune number wins
+0071 musChannel                 ; tune being updated (3..0)
+0072 musPos 4                   ; per tune: position in the song
+0076 musTimer 4                 ; per tune: note duration counter; musTimer+3 (start tune) != 0 blocks the hum and SpawnPlayer
+007E sndScratch 16              ; $7E-$8D cleared every frame by UpdateSound; $7E = 1 when a note starts
+0080 sq1PeriodLo                ; SQ1 period written by MusicChannelUpdate
+0081 sq1PeriodHi
+008E flagshipRespawn 2          ; nonzero: a lone flagship escaped, it comes back in column 4/5 next wave (current player)
+0090 otherFlagshipRespawn 2     ; same for the waiting player (swapped by SwapPlayers)
+0092 columnDivers 10           ; number of diving aliens per formation column (keeps the column for FormationBounce)
+009C modeTimer                  ; general timer: title menu, story text, delay after a wave
+009D diverOam                   ; current diver slot * 16 (OAM offset)
+009E diverSlot                  ; current diver slot (0-7)
+009F waveCleared                ; set by CheckFormationEmpty when all 10 columns are empty
+00A0 eventQueue 32              ; ring buffer of formation columns to redraw
+00C0 eventHead                  ; write index (QueueColumnRedraw)
+00C1 eventTail                  ; read index (UpdateBgTiles)
+00C2 flapTimer                  ; FormationFlapTimer: 9..0 = column to redraw, then down to -12
+00C3 formation 10              ; column bitmasks (column 0 = left): bits 0-2 blue rows, 3 purple, 4 red, 5 flagship
+00CD formationOther 10          ; formation of the player who is waiting (2P game)
+00D7 redrawColumn             ; column being redrawn by UpdateBgTiles
+00D8 flapPhase                  ; formation wing animation phase (+1 after each full redraw)
+00DA tmp0                       ; $DA-$E0: temporaries shared by many routines
+00DB tmp1
+00DC tmp2
+00DD tmp3                       ; also the direction quadrant of a diver
+00DE tmp4                       ; also Divide8 divisor, demo fire flag
+00DF tmp5                       ; also Divide8 dividend
+00E0 tmp6                       ; also Divide8 result
+00E1 vramQueueCount            ; entries in the vramQueue* arrays (max 16), flushed in NMI
+00E2 srcPtr 2                   ; PrintText: source of the text; RESET: destination of the CHR copies
+00E4 playerX                  ; signed -$6A..+$6A, 0 = centre (ship X = playerX + $78); also the bottom scroll
+00E5 formationX                 ; formation horizontal position (column X = col*16 + $30 + formationX)
+00E8 jumpTablePtr 2             ; JumpTableDispatch: return address of the JSR (= table - 1)
+00EA jumpTarget 2               ; JumpTableDispatch: jump target
+00EC motionTick                 ; UpdateMotionSteps runs once per frameTick
+00ED frameTick                 ; incremented once per GameModeDispatch
+00EE joy1Prev
+00EF joy1                       ; controller 1, bit 7 = A ... bit 0 = Right
+00F0 joy2Prev
+00F1 joy2                       ; controller 2 (A+B = $C0 enables the music player)
+00F2 diverDirTmp                ; MoveDiver: direction index (diverDir / 4)
+00F6 scrollX
+00F7 scrollY
+00FA ppuMaskShadow
+00FB ppuCtrlShadow
+00FD subStep                    ; step inside a gameSubMode handler (death sequence, story text ...)
+00FE gameSubMode               ; index for the per-mode jump tables
+00FF gameMode                   ; index into GameModeTable
+
+; ---- $0100 page (above the stack, not cleared on warm reset)
+0100 stackPage                ; stack page base, STA stackPage,X
+0101 musicPlayerFlag            ; nonzero -> NMI runs MusicPlayer every frame. In REVA nothing sets it: ResetKeepSignature
+                                ; (both TCRF tricks) stores 0 - checked in Mesen, tools/mesen/reset_trick.lua
+0102 frameCounter 3             ; 24-bit, big-endian: $0102 high ... $0104 low
+0105 resetSignature 16          ; copy of "HARUHISA UDAGAWA" (TCRF)
+0115 resetCounter               ; TCRF: number of warm resets; $2D (45) / $0A (10) enable the music player
+0116 scoreArea 26             ; $0116-$012F, set to $10 (blank) at power-on; AddScore uses scoreArea,Y
+0117 scoreP1 6                 ; BCD digits, tile $10 = blank
+0120 hiScore 6                  ; 5000 after power-on
+0129 scoreP2 6
+; $014E-$01FF songTable + tunes 1-3 and $0300-$067F chrData (texts): copied from CHR ROM at RESET,
+; their labels are defined in src/chr.asm (tools/chrdata.py)
+
+; ---- buffers
+0200 oamBuffer 256              ; sprite page for OAM DMA ($4014 = $02)
+0600 ramPage6                   ; RESET clears $0600-$06FF (the text copy then overwrites $0600-$067F)
+068F demoTargetX                ; demo AI: X the ship walks to
+0690 hudBuffer 44               ; HUD tiles for PPU $2074-$209F (two rows): 22 pairs queued one per frame by UpdateHudScores
+06A0 hudScore 6                 ; score of the current player shown in the HUD (hudScore+9 = hiScore copy)
+06B1 hudLives 3                 ; ship icons, lower half (tile $6F; upper half $6E at hudBuffer+1)
+06B5 hudFlags 5                 ; stage flag icons (lower half; upper half at hudBuffer+5)
+06B6 hudStageTens               ; stage number (stage >= 5) next to one flag; overlaps hudFlags+1
+06B7 hudStageOnes
+06BC textBuf 26                 ; one text row: PrintText fills it, WriteVramRow (NMI) copies it to textVram
+06D6 textCharBias               ; subtracted from the characters by PrintText ($30 or 0)
+06D7 textNtFlag                 ; PrintText: nonzero = second nametable ($28xx); also a step counter of IntroTextSequence
+06D8 randomTable 16             ; randomTable,X += rngSeed every NMI (X = frameTick & 15)
+; per diver slot (X = diverSlot 0-7; slot 0 = flagship, 1-2 = escorts, 7 = explosion of a formation alien)
+06E8 diverShots 8               ; bullets the diver may still fire (2, 3 from stage 1)
+06F0 diverType 8                ; score index: formation row 0-5; escort 4; flagship 0 + 1 per escort launched or lost (bonus index)
+06F8 diverEscort2 8             ; flagship: slot of the second escort
+06FF flagshipDir                ; -1 / +1: side of the flagship attack (= diverEscort2+7)
+0700 diverEscort1 8             ; flagship: slot of the first escort
+0707 flagshipColumn             ; column of the attacking flagship (= diverEscort1+7)
+0708 diverIsFlagship 8          ; $60 for a flagship (also its tile offset), else 0
+0710 diverDropY 8               ; state 4/9: frames left while dropping back into the formation
+0718 diverRow 8                 ; formation row 0-5
+0720 diverColumn 8              ; formation column 0-9
+0728 diverTile 8                ; first tile of the 2x2 metasprite
+0730 diverDir 8                 ; direction 0-$5F (diverDir / 4 indexes the Dir* tables); a frame counter in states 11-12
+0738 diverState 8               ; per diver slot: state for DiverStateDispatch
+0740 diverTargetX 8             ; X where the dive turns back toward the ship
+0748 vramQueueTile2 16          ; NMI queue: second tile
+0758 vramQueueTile1 16          ; NMI queue: first tile
+0768 vramQueueLo 16             ; NMI queue: PPU address low
+0778 vramQueueHi 16             ; NMI queue: PPU address high
+; motion objects (24, F381): 0-6 enemy bullets, 9-15 diver dx (slot 0-6), 16-22 diver dy (slot 0-6), 23 = the formation
+0788 motionDir 24               ; bit 7 = negative; GameHacking.org "enemy shooting affected" 078D:00 = motionDir+5
+079F formationDir               ; bit 7 = moving left (= motionDir+23), flipped by FormationBounce
+07A0 motionDiv 24               ; divisor: speed = motionNum / motionDiv px per frame; 0 = object idle
+07B8 motionNum 24               ; numerator, added to motionRem every frame
+07D0 motionRem 24               ; remainder of the division (sub-pixel position)
+07E8 motionStep 23              ; signed pixels per frame, computed by UpdateMotionSteps
+07FF formationDx                ; formation drift per frame (= motionStep+23)
